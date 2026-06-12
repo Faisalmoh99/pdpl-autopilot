@@ -7,6 +7,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
+from pdpl.api.checks import router as checks_router
 from pdpl.api.health import router as health_router
 from pdpl.api.tenants import router as tenants_router
 from pdpl.config import get_settings
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(tenants_router)
+    app.include_router(checks_router)
     return app
 
 
