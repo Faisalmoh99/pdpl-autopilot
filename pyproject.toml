@@ -5,14 +5,36 @@ description = "PDPL readiness assistant for small and medium Saudi businesses"
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.13",
-    "sqlalchemy>=2.0",
+    "sqlalchemy[asyncio]>=2.0",
     "psycopg2-binary>=2.9",
+    "asyncpg>=0.29",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "structlog>=24.4",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "uuid6>=2024.7",
     "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
 ]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-py-modules = []
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# Share one event loop across the whole session so the async DB engine,
+# which is bound to the loop it was created on, stays valid across tests.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
