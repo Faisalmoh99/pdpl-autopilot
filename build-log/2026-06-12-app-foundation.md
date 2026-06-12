@@ -52,6 +52,20 @@
 - Tests run against the **real Supabase project**, not a throwaway Postgres. At zero traffic this is the right tradeoff (provisioning a per-run DB is friction we don't need yet). The cost is that `audit_log` accumulates one row per immutability-test run forever, by design — *which is fine, because that is what append-only means.* The trigger to add ephemeral test infrastructure is the same as the Prometheus trigger: first real tenant.
 - One test fix-up that's worth noting for future-me: pytest-asyncio creates a new event loop per test by default, but our async DB engine is built once and bound to the loop it first saw. The fix was pinning the loop to session scope in `pyproject.toml`. Default config would have produced a green local run and a red CI run — easy way to lose an afternoon.
 
+## Lessons (my words)
+
+1. I don't blindly trust my Python or the app layer. The real enforcement lives in the
+   database: pdpl_app simply lacks UPDATE/DELETE on audit_log (the permission layer), and
+   a TRUNCATE trigger blocks the one operation grants can't. The test proves that even if
+   the app tried to tamper, it would fail.
+
+2. Atomicity: a tenant and its audit record commit together or not at all, in a single
+   transaction. It is engineering- and legally-impossible for a tenant to exist without
+   the audit record that documents it.
+
+3. The automated test is what turned the ADR's design promises into real, proven security
+   guarantees. We prove our security claims in code, not in slogans.
+
 ## Next session candidates
 
 1. SQLAlchemy ORM models matching the migration; flip `target_metadata = Base.metadata` in `migrations/env.py`.
