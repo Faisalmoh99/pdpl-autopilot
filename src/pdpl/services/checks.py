@@ -8,10 +8,14 @@ A single deterministic pass for one tenant:
     rolls the whole run back.
 
 The status decision is delegated to a `StatusDecider` callable. The
-real engine is deferred (see docs/02-data-model.md "Open questions"
--- the "Control-status decision engine" ADR). The default decider
-returns 'not_assessed' for every control, which proves the SCD Type 2
-transition mechanics without pretending we can decide compliance yet.
+real engine now lives in pdpl.services.decision (ADR-0006): when no
+decider is injected, run_check loads the tenant's latest questionnaire
+answers inside the transaction and builds the deterministic decider as
+the default. The engine is 100% deterministic; AI is never in this path.
+
+`baseline_decider` (returns 'not_assessed' for every control) is retained
+for explicit baseline runs and as the documented "decides nothing"
+reference, but it is no longer the default.
 
 Tests inject custom deciders to drive specific transitions. The HTTP
 route does NOT expose a decider override — production code only ever
@@ -31,6 +35,7 @@ from pdpl.db.session import session_scope
 from pdpl.observability.correlation import current_correlation_id
 from pdpl.observability.logging import get_logger
 from pdpl.observability.metrics import counter
+from pdpl.services.decision import build_deterministic_decider, load_tenant_answers
 
 _log = get_logger("pdpl.checks")
 
@@ -126,7 +131,6 @@ async def run_check(
     check_run itself. The partial unique index `uniq_findings_current`
     is the DB-side safety net against the worst case.
     """
-    chosen_decider: StatusDecider = decider or baseline_decider
     cid = correlation_id if correlation_id is not None else current_correlation_id()
     check_run_id = uuid6.uuid7()
 
@@ -136,6 +140,16 @@ async def run_check(
         ).first()
         if tenant_row is None:
             raise TenantNotFound(str(tenant_id))
+
+        # Default path: build the REAL deterministic decider from the
+        # tenant's latest answers, read inside this transaction so the
+        # engine and the findings it writes see one consistent snapshot.
+        # An injected decider (tests only) bypasses this.
+        if decider is None:
+            answers = await load_tenant_answers(session, tenant_id)
+            chosen_decider: StatusDecider = build_deterministic_decider(answers)
+        else:
+            chosen_decider = decider
 
         await session.execute(
             _INSERT_CHECK_RUN_SQL,
