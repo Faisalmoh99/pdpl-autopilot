@@ -52,5 +52,13 @@
 
 ## Lessons (Faisal's words)
 
-<!-- To be filled in by Faisal after the session — leaving this section
-empty matches the pattern from 2026-06-12. -->
+1. The convenient option (reuse the existing 'unknown' status, skip a migration) would
+   have collapsed two genuinely different states into one: "never assessed" vs "assessed
+   but indeterminate." We added 'not_assessed' instead. The deciding factor was asymmetric
+   risk — an extra enum value is harmless, but un-conflating historical data later is a
+   lossy migration. Name a state by what it means, not by what avoids work today.
+
+2. We don't edit events — we record them, and they become history. This holds in two
+   places: audit_log is append-only (immutable), and findings use SCD Type 2 (a status
+   change closes the old row and opens a new one, never overwrites). State over time is a
+   sequence of recorded facts, not a mutable current value.
