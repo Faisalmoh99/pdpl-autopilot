@@ -1,0 +1,40 @@
+# Architectural fitness function (CLAUDE.md core decision principle).
+#
+# AI reads / suggests / explains. Deterministic logic decides / scores /
+# classifies. A compliance decision must NEVER reach the user directly from
+# an AI output. This file turns that principle from a convention into a
+# mechanically enforced invariant: the deterministic core may not import the
+# AI layer or any LLM SDK, and `lint-imports` FAILS the build if it does.
+#
+# Enforced through the test suite by tests/test_architecture.py, which runs
+# `lint-imports` and asserts a clean exit — so a violation breaks `pytest`,
+# the same gate every other invariant goes through.
+
+[importlinter]
+root_package = pdpl
+# Required so the forbidden contract can name third-party LLM SDKs (anthropic,
+# openai, ...) that live outside the `pdpl` package.
+include_external_packages = True
+
+[importlinter:contract:deterministic-core-no-ai]
+name = Deterministic core must not import the AI layer or any LLM SDK
+type = forbidden
+# The deterministic core: the modules that decide, score, and classify.
+# These produce or aggregate compliance verdicts and must stay provably free
+# of AI in their import graph (direct OR transitive).
+source_modules =
+    pdpl.services.decision
+    pdpl.services.checks
+    pdpl.services.scoring
+# Reserved internal AI namespace (Phase 4 lives here, forbidden from day one)
+# plus every LLM SDK we might reach for. grimp analyses imports statically, so
+# these are caught even when the SDK is not installed.
+forbidden_modules =
+    pdpl.ai
+    anthropic
+    openai
+    google
+    vertexai
+    cohere
+    litellm
+    langchain
