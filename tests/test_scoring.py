@@ -152,12 +152,13 @@ def test_zero_weight_assessed_does_not_divide_by_zero():
 # PURE unit tests — build_gap_report. No database.
 # =====================================================================
 def test_gap_report_filters_and_orders_by_severity_desc():
+    # rows: (code, title_en, title_ar, status, rationale, weight)
     rows = [
-        ("PDPL-ART31-ROPA", "ROPA", "compliant", "all satisfied", 5.0),
-        ("PDPL-ART4-DSR-ACCESS", "Access", "non_compliant", "none satisfied", 7.0),
-        ("PDPL-ART20-BREACH-NOTIFY-72H", "Breach", "partial", "1 of 2", 10.0),
-        ("PDPL-ART25-RETENTION-LIMITS", "Retention", "not_assessed", "unanswered", 6.0),
-        ("PDPL-ART5-LAWFUL-BASIS", "Lawful", "not_applicable", "n/a", 9.0),
+        ("PDPL-ART31-ROPA", "ROPA", "سجل", "compliant", "all satisfied", 5.0),
+        ("PDPL-ART4-DSR-ACCESS", "Access", "وصول", "non_compliant", "none", 7.0),
+        ("PDPL-ART20-BREACH-NOTIFY-72H", "Breach", "تسرب", "partial", "1 of 2", 10.0),
+        ("PDPL-ART25-RETENTION-LIMITS", "Retention", "احتفاظ", "not_assessed", "u", 6.0),
+        ("PDPL-ART5-LAWFUL-BASIS", "Lawful", "أساس", "not_applicable", "n/a", 9.0),
     ]
     gaps = build_gap_report(rows)
 
@@ -169,17 +170,19 @@ def test_gap_report_filters_and_orders_by_severity_desc():
         "PDPL-ART25-RETENTION-LIMITS",  # 6.0
     ]
     assert all(isinstance(g, GapItem) for g in gaps)
-    # Status + rationale + severity carried through for the top gap.
+    # Status + rationale + severity + both titles carried through for the top gap.
     top = gaps[0]
     assert top.status == "partial"
     assert top.rationale == "1 of 2"
     assert top.severity_weight == 10.0
+    assert top.title_en == "Breach"
+    assert top.title_ar == "تسرب"
 
 
 def test_gap_report_tie_break_is_control_code():
     rows = [
-        ("PDPL-Z", "Z", "non_compliant", "r", 7.0),
-        ("PDPL-A", "A", "partial", "r", 7.0),
+        ("PDPL-Z", "Z", "ز", "non_compliant", "r", 7.0),
+        ("PDPL-A", "A", "أ", "partial", "r", 7.0),
     ]
     gaps = build_gap_report(rows)
     # Equal severity -> alphabetical by code, deterministically.
@@ -187,7 +190,7 @@ def test_gap_report_tie_break_is_control_code():
 
 
 def test_gap_report_unknown_is_a_gap():
-    rows = [("PDPL-X", "X", "unknown", "could not decide", 8.0)]
+    rows = [("PDPL-X", "X", "إكس", "unknown", "could not decide", 8.0)]
     gaps = build_gap_report(rows)
     assert len(gaps) == 1
     assert gaps[0].status == "unknown"
@@ -195,7 +198,7 @@ def test_gap_report_unknown_is_a_gap():
 
 def test_gap_report_rejects_unrecognised_status():
     with pytest.raises(ValueError):
-        build_gap_report([("PDPL-X", "X", "bogus", "r", 5.0)])
+        build_gap_report([("PDPL-X", "X", "إكس", "bogus", "r", 5.0)])
 
 
 # =====================================================================
@@ -327,8 +330,10 @@ async def test_gap_report_lists_right_controls_ordered_by_severity(
     assert weights == sorted(weights, reverse=True)
     assert gaps[0].control_code == "PDPL-ART20-BREACH-NOTIFY-72H"
 
-    # Every item carries a deterministic rationale (never empty).
+    # Every item carries a deterministic rationale (never empty) and both
+    # the English and Arabic control titles, read straight from `controls`.
     assert all(g.rationale for g in gaps)
+    assert all(g.title_en and g.title_ar for g in gaps)
 
 
 async def test_score_and_gap_report_reject_inactive_tenant(app, app_database_url):

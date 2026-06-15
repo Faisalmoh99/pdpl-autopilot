@@ -97,9 +97,22 @@ class GapItem:
 
     control_code: str
     title_en: str
+    title_ar: str
     status: str
     rationale: str
     severity_weight: float
+
+
+@dataclass(frozen=True)
+class ReadinessReport:
+    """One consistent snapshot for a tenant: score + gaps from one read.
+
+    Built by `readiness_report` so the HTTP layer can present both from a
+    single, consistent view of the current findings (no two-read skew).
+    """
+
+    score: ReadinessScore
+    gaps: list[GapItem]
 
 
 def _credit(status: str) -> float:
@@ -172,16 +185,16 @@ _GAP_STATUSES = frozenset({"non_compliant", "partial", "unknown", "not_assessed"
 
 
 def build_gap_report(
-    rows: list[tuple[str, str, str, str, float]],
+    rows: list[tuple[str, str, str, str, str, float]],
 ) -> list[GapItem]:
-    """Build the ordered gap list from (code, title_en, status, rationale, weight) rows.
+    """Build the ordered gap list from (code, title_en, title_ar, status, rationale, weight) rows.
 
     Includes every control that is a gap; excludes compliant and
     not_applicable. Validates the status against the data model so an
     unexpected value fails loudly rather than being silently dropped.
     """
     gaps: list[GapItem] = []
-    for code, title_en, status, rationale, weight in rows:
+    for code, title_en, title_ar, status, rationale, weight in rows:
         if status not in _ALL_STATUSES:
             raise ValueError(f"unrecognised finding status: {status!r}")
         if status not in _GAP_STATUSES:
@@ -190,6 +203,7 @@ def build_gap_report(
             GapItem(
                 control_code=code,
                 title_en=title_en,
+                title_ar=title_ar,
                 status=status,
                 rationale=rationale,
                 severity_weight=weight,
@@ -212,6 +226,7 @@ _SELECT_CONTROL_STATUSES_SQL = text(
     """
     SELECT c.code               AS code,
            c.title_en           AS title_en,
+           c.title_ar           AS title_ar,
            c.severity_weight    AS severity_weight,
            f.status             AS status,
            f.rationale          AS rationale
@@ -229,8 +244,8 @@ _SELECT_CONTROL_STATUSES_SQL = text(
 
 async def _load_control_statuses(
     tenant_id: UUID,
-) -> list[tuple[str, str, float, str, str]]:
-    """Read (code, title_en, weight, status, rationale) per active control.
+) -> list[tuple[str, str, str, float, str, str]]:
+    """Read (code, title_en, title_ar, weight, status, rationale) per active control.
 
     Verifies the tenant is active first. Missing finding -> not_assessed with
     a fixed deterministic rationale.
@@ -248,7 +263,7 @@ async def _load_control_statuses(
             )
         ).all()
 
-    out: list[tuple[str, str, float, str, str]] = []
+    out: list[tuple[str, str, str, float, str, str]] = []
     for r in result_rows:
         status = r.status if r.status is not None else _MISSING_FINDING_STATUS
         rationale = (
@@ -256,7 +271,16 @@ async def _load_control_statuses(
             if r.rationale is not None
             else "no check run has evaluated this control for this tenant yet"
         )
-        out.append((r.code, r.title_en, float(r.severity_weight), status, rationale))
+        out.append(
+            (
+                r.code,
+                r.title_en,
+                r.title_ar,
+                float(r.severity_weight),
+                status,
+                rationale,
+            )
+        )
     return out
 
 
@@ -270,7 +294,7 @@ async def score_tenant(tenant_id: UUID) -> ReadinessScore:
     `score.computed` audit event becomes appropriate.
     """
     rows = await _load_control_statuses(tenant_id)
-    result = compute_score([(status, weight) for _, _, weight, status, _ in rows])
+    result = compute_score([(status, weight) for *_, weight, status, _ in rows])
 
     counter(
         "scoring.computed",
@@ -296,7 +320,10 @@ async def gap_report(tenant_id: UUID) -> list[GapItem]:
     """
     rows = await _load_control_statuses(tenant_id)
     gaps = build_gap_report(
-        [(code, title, status, rationale, weight) for code, title, weight, status, rationale in rows]
+        [
+            (code, title_en, title_ar, status, rationale, weight)
+            for code, title_en, title_ar, weight, status, rationale in rows
+        ]
     )
 
     _log.info(
@@ -305,3 +332,34 @@ async def gap_report(tenant_id: UUID) -> list[GapItem]:
         gap_count=len(gaps),
     )
     return gaps
+
+
+async def readiness_report(tenant_id: UUID) -> ReadinessReport:
+    """The tenant's full readiness view — score + gaps — from ONE snapshot.
+
+    A single `_load_control_statuses` read feeds both `compute_score` and
+    `build_gap_report`, so the score and the gap list can never disagree about
+    the tenant's current findings (no two-read skew). This is the seam the
+    HTTP readiness route wraps; like `score_tenant` it is a derived read that
+    persists nothing and writes no audit row (ADR-0007).
+    """
+    rows = await _load_control_statuses(tenant_id)
+    score = compute_score([(status, weight) for *_, weight, status, _ in rows])
+    gaps = build_gap_report(
+        [
+            (code, title_en, title_ar, status, rationale, weight)
+            for code, title_en, title_ar, weight, status, rationale in rows
+        ]
+    )
+
+    counter("scoring.readiness_report", has_score=str(score.score is not None))
+    _log.info(
+        "scoring.readiness_report",
+        tenant_id=str(tenant_id),
+        score=score.score,
+        coverage=score.coverage,
+        applicable_controls=score.applicable_controls,
+        assessed_controls=score.assessed_controls,
+        gap_count=len(gaps),
+    )
+    return ReadinessReport(score=score, gaps=gaps)
