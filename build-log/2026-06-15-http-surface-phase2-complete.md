@@ -145,7 +145,26 @@ because it is easy and gives nice 422s — but that quietly creates a second sou
 of truth that drifts from the service and, here, would have hard-coded a yes/no
 assumption that the data model already designed past (`answer_type`). Drawing the
 line as "route validates shape, service validates meaning" keeps the service
-authoritative and the route genuinely thin. Second lesson: a transport layer is
-not exempt from testing its failure paths — the only reason the 500-on-validator
-bug was caught is that the duplicate-question test asserted 422 and got a 500
-instead. Happy-path-only tests on "thin" code are how latent 500s ship.
+authoritative and the route genuinely thin.
+
+**Even thin layers (transport / routing) need rigorous failure-path tests, not
+just the happy path.**
+
+- The global validation error handler choked on a custom validator's
+  `ValueError`: pydantic stuffs the non-serialisable exception object into each
+  error's `ctx`, and the handler's raw `json.dumps(exc.errors())` blew up — so
+  what should have been a clean 422 came back as a 500.
+- That bug had been latent since the foundation session. It went unnoticed for
+  one reason only: until now, every test had exercised the *happy* path of
+  validation. No one had ever asserted on a validator-driven failure, so the
+  handler's failure path had literally never run.
+- The duplicate-question failure-path test is what surfaced it — it asserted 422,
+  got 500, and dragged the latent defect into the light.
+- The fix (`jsonable_encoder`, mirroring FastAPI's own handler) immunises *every*
+  future validator, not just this one. It is a structural fix to the shared
+  handler, not a one-off patch around the symptom.
+- The principle: a thin route is still real code, and its error/validation paths
+  are part of its contract, not an afterthought. A bug in a *shared* transport
+  layer doesn't fail loudly in one place — it silently degrades every endpoint
+  that routes through the same handler. That blast radius is exactly why "thin"
+  is not an excuse to skip failure-path tests.
