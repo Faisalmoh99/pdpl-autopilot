@@ -31,10 +31,12 @@ import uuid6
 from sqlalchemy import text
 
 from pdpl.db.audit import write_event
+from pdpl.db.outbox import enqueue_alert
 from pdpl.db.session import session_scope
 from pdpl.observability.correlation import current_correlation_id
 from pdpl.observability.logging import get_logger
 from pdpl.observability.metrics import counter
+from pdpl.services.alerts import is_worsening_transition
 from pdpl.services.decision import build_deterministic_decider, load_tenant_answers
 
 _log = get_logger("pdpl.checks")
@@ -187,6 +189,7 @@ async def run_check(
         created = 0
         transitioned = 0
         unchanged = 0
+        alerts_enqueued = 0
 
         for ctrl in active_controls:
             new_status, new_rationale = chosen_decider(ctrl.code)
@@ -268,6 +271,23 @@ async def run_check(
             )
             transitioned += 1
 
+            # Reliable alerting (ADR-0008): a worsening transition writes an
+            # outbox row in THIS transaction — atomic with the finding, no
+            # notifier import, no network call. The worker sends it later.
+            if is_worsening_transition(old_status, new_status):
+                await enqueue_alert(
+                    session,
+                    tenant_id=tenant_id,
+                    finding_id=new_finding_id,
+                    control_id=ctrl.id,
+                    control_code=ctrl.code,
+                    from_status=old_status,
+                    to_status=new_status,
+                    check_run_id=check_run_id,
+                    correlation_id=cid,
+                )
+                alerts_enqueued += 1
+
         await session.execute(_COMPLETE_CHECK_RUN_SQL, {"id": check_run_id})
         await write_event(
             session,
@@ -283,6 +303,7 @@ async def run_check(
                 "findings_created": created,
                 "findings_transitioned": transitioned,
                 "findings_unchanged": unchanged,
+                "alerts_enqueued": alerts_enqueued,
             },
             correlation_id=cid,
         )
@@ -293,6 +314,7 @@ async def run_check(
         created=str(created),
         transitioned=str(transitioned),
         unchanged=str(unchanged),
+        alerts_enqueued=str(alerts_enqueued),
     )
     _log.info(
         "check_run.completed",
@@ -303,5 +325,6 @@ async def run_check(
         findings_created=created,
         findings_transitioned=transitioned,
         findings_unchanged=unchanged,
+        alerts_enqueued=alerts_enqueued,
     )
     return check_run_id
