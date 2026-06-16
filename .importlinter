@@ -26,6 +26,7 @@ source_modules =
     pdpl.services.decision
     pdpl.services.checks
     pdpl.services.scoring
+    pdpl.services.alerts
 # Reserved internal AI namespace (Phase 4 lives here, forbidden from day one)
 # plus every LLM SDK we might reach for. grimp analyses imports statically, so
 # these are caught even when the SDK is not installed.
