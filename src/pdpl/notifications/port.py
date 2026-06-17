@@ -31,9 +31,26 @@ class OutboxAlert:
 
 
 class NotifierError(Exception):
-    """Delivery failed. The worker owns the transient-vs-permanent decision
-    via attempts / max_attempts and backoff — a Notifier just signals that a
-    send did not succeed by raising (this, or any other exception)."""
+    """Delivery failed. The base type for delivery failures.
+
+    A Notifier signals *how* a send failed by raising one of the two typed
+    subclasses below so the worker (Session B) can route the outcome:
+    `TransientNotifierError` -> retry with backoff (bounded by max_attempts),
+    `PermanentNotifierError` -> dead-letter without retrying. A failure a
+    Notifier cannot classify is raised as this base type (or any other
+    exception) and PROPAGATES — the worker's default branch decides
+    (ADR-0008): treat unclassified as transient, and log loudly.
+    """
+
+
+class TransientNotifierError(NotifierError):
+    """A retry-worthy failure: timeout, connection error, HTTP 5xx, or 429.
+    The worker retries with full-jitter backoff up to max_attempts."""
+
+
+class PermanentNotifierError(NotifierError):
+    """A failure retrying cannot fix: HTTP 4xx (other than 429) — a bad URL,
+    auth, or payload. The worker dead-letters immediately, no retries."""
 
 
 @runtime_checkable

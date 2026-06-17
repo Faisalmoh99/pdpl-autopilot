@@ -31,6 +31,22 @@ class Settings(BaseSettings):
     service_name: str = Field("pdpl-autopilot", alias="SERVICE_NAME")
     env_name: str = Field("dev", alias="ENV_NAME")
 
+    # Alert webhook (ADR-0008). Optional at import — the API and most tests
+    # never touch alerting — so a missing value does NOT stop the process
+    # from serving requests. The WebhookNotifier fails fast at CONSTRUCTION
+    # if URL/secret are absent, so the worker (Session B) still cannot run
+    # misconfigured. The signing secret is a SecretStr and is never logged.
+    alert_webhook_url: str | None = Field(None, alias="ALERT_WEBHOOK_URL")
+    alert_webhook_secret: SecretStr | None = Field(
+        None, alias="ALERT_WEBHOOK_SECRET"
+    )
+    # A single overall wall-clock ceiling for one send (NOT per connect/read
+    # phase). In Session B the worker holds the outbox row lock across this
+    # send, so this value is the lock-hold ceiling.
+    alert_webhook_timeout_seconds: float = Field(
+        5.0, alias="ALERT_WEBHOOK_TIMEOUT_SECONDS"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
