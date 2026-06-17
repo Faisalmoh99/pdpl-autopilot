@@ -47,6 +47,27 @@ class Settings(BaseSettings):
         5.0, alias="ALERT_WEBHOOK_TIMEOUT_SECONDS"
     )
 
+    # Outbox worker (ADR-0008, Session B2). The worker builds its OWN engine
+    # from this DEDICATED url — a session-level / direct connection AS
+    # pdpl_app, NOT the transaction pooler (FOR UPDATE + a held transaction do
+    # not fit the transaction pooler). Optional at import (the API never runs
+    # the worker); the worker entry point fails fast if it is unset.
+    worker_database_url: SecretStr | None = Field(
+        None, alias="WORKER_DATABASE_URL"
+    )
+    # Retry / backoff policy. Full-jitter exponential backoff:
+    # next_attempt_at = now() + random(0, min(base * 2^(attempts-1), cap)).
+    outbox_max_attempts: int = Field(5, alias="OUTBOX_MAX_ATTEMPTS")
+    outbox_backoff_base_seconds: float = Field(
+        60.0, alias="OUTBOX_BACKOFF_BASE_SECONDS"
+    )
+    outbox_backoff_cap_seconds: float = Field(
+        3600.0, alias="OUTBOX_BACKOFF_CAP_SECONDS"
+    )
+    outbox_poll_interval_seconds: float = Field(
+        5.0, alias="OUTBOX_POLL_INTERVAL_SECONDS"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
