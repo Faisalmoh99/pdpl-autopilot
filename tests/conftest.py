@@ -41,3 +41,21 @@ def app_database_url() -> str:
     if not url:
         pytest.skip("APP_DATABASE_URL not set")
     return url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+@pytest.fixture(scope="session")
+async def worker_session_factory():
+    """A SQLAlchemy async session factory bound to the worker's OWN engine,
+    built from WORKER_DATABASE_URL — so worker tests exercise the real worker
+    connection path (session-level/direct AS pdpl_app), not APP_DATABASE_URL.
+    """
+    from pdpl.workers.outbox import make_session_factory, make_worker_engine
+
+    url = os.environ.get("WORKER_DATABASE_URL")
+    if not url:
+        pytest.skip("WORKER_DATABASE_URL not set")
+    engine = make_worker_engine(url)
+    try:
+        yield make_session_factory(engine)
+    finally:
+        await engine.dispose()
