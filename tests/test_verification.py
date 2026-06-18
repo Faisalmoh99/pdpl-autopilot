@@ -53,6 +53,23 @@ def test_no_compliance_assertion_passes_for_clean_text() -> None:
     assert _verify(_GOOD_AR).no_compliance_assertion.passed is True
 
 
+def test_legitimate_remediation_with_bare_compliance_word_passes() -> None:
+    # The metric-validity test: a bare compliance WORD («متوافق» / "compliant")
+    # used in instructive/conditional remediation guidance is NOT an assertion
+    # that the user *is* compliant — it must PASS. This proves the
+    # assertion-vs-bare-token distinction works behaviorally (not merely that we
+    # dropped the bare tokens from the denylist). False-rejecting this kind of
+    # text would depress gate_pass_rate as a gate-too-strict artefact (ADR-0010
+    # §3), corrupting the headline metric.
+    text = (
+        "حتى تصبح متوافقاً مع المادة، فعّل الإشعار بالخصوصية ووضّح فيه "
+        "أغراض المعالجة وحقوق العميل قبل جمع بياناته."
+    )
+    verdict = _verify(text)
+    assert verdict.no_compliance_assertion.passed is True
+    assert verdict.passed is True
+
+
 # --------------------------------------------------------------------------
 # Check 2 — references the control (title substring OR salient token OR code).
 # --------------------------------------------------------------------------
