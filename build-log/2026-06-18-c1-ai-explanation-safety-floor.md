@@ -116,4 +116,23 @@ what lets `pdpl.verification` import nothing from either side.
 
 ## Lessons (Faisal)
 
-<!-- TODO: Faisal to fill in. -->
+1. Shrinking the input is the secret to isolation.
+By forbidding the verifier from consuming the full GapContext and forcing it to take only
+primitive strings — the candidate text + the control code + the control title — we made it a
+module blind to the business and 100% independent. The verifier knows nothing about the status
+or the rationale; it only knows how to match and normalize. That minimal input is exactly what
+lets it avoid importing GapContext (which lives in pdpl.ai), so it never reaches into the
+producer or the core.
+
+2. A smart denylist protects the real numbers.
+If we had seeded the gate with bare words, we would have suppressed the AI and blocked it from
+saying excellent instructive phrases ("to become compliant with the article, enable
+retention…"). Banning assertion / second-person forms — not bare compliance words — is the
+correct design for a gate guard, so we don't fool ourselves with illusory fallback numbers when
+C2 measures gate_pass_rate.
+
+3. The linter is the strict architectural governor.
+Enforcing the four contracts with import-linter protects against a future contributor silently
+crossing the trust boundary — an import violation, not every kind of human error. The guard
+never imports the thing it guards, and the deterministic decision engine stays sealed in its
+sanctuary: the AI can't reach into it, and it can't reach into the AI.
