@@ -16,6 +16,7 @@ root_package = pdpl
 # openai, ...) that live outside the `pdpl` package.
 include_external_packages = True
 
+# Contract 1 (existing): the deterministic core may not import the AI layer.
 [importlinter:contract:deterministic-core-no-ai]
 name = Deterministic core must not import the AI layer or any LLM SDK
 type = forbidden
@@ -39,3 +40,50 @@ forbidden_modules =
     cohere
     litellm
     langchain
+
+# Contract 2 (new, ADR-0009 §7): the AI layer may not import the decision
+# core. The one-directional fence above left a back door — the AI reads
+# deterministic outputs AS DATA (a GapContext handed to it), and must not be
+# able to import the decision machinery and thereby recompute or feed back
+# into a verdict. This closes it.
+[importlinter:contract:ai-no-decision-core]
+name = AI layer must not import the deterministic decision core
+type = forbidden
+source_modules =
+    pdpl.ai
+forbidden_modules =
+    pdpl.services.decision
+    pdpl.services.checks
+    pdpl.services.scoring
+
+# Contract 3 (new, ADR-0009 §7): the verifier is the TRUSTED guard and must be
+# fully independent of the untrusted producer. A guard that imports the thing
+# it guards is a category error — enforce its independence, do not assume it.
+[importlinter:contract:verification-no-ai]
+name = Verification gate must not import the AI layer or any LLM SDK
+type = forbidden
+source_modules =
+    pdpl.verification
+forbidden_modules =
+    pdpl.ai
+    anthropic
+    openai
+    google
+    vertexai
+    cohere
+    litellm
+    langchain
+
+# Contract 4 (new, ADR-0009 §7): the verifier must also be independent of the
+# decision core. It consumes only the minimal control facts passed as plain
+# arguments, never the decision machinery — so it cannot drift toward
+# re-deciding instead of verifying.
+[importlinter:contract:verification-no-decision-core]
+name = Verification gate must not import the deterministic decision core
+type = forbidden
+source_modules =
+    pdpl.verification
+forbidden_modules =
+    pdpl.services.decision
+    pdpl.services.checks
+    pdpl.services.scoring
