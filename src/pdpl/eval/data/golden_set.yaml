@@ -1,0 +1,269 @@
+# PDPL Autopilot — AI gap-explanation golden set (ADR-0010 §4)
+#
+# Version-controlled eval corpus. Each case is a real, tenant-agnostic
+# GapContext (ADR-0009 §2) reusing the seeded controls (migration 0003) as the
+# input corpus. The `rationale` of every case is PROVABLY FAITHFUL engine
+# output: `source_answers` regenerate it through the real deterministic engine
+# (pdpl.services.decision), and tests/test_eval_golden_set.py asserts the match
+# — so these strings cannot drift into hand-typed lookalikes.
+#
+# Distribution (weighted hybrid, ADR-0010 §4): heavy on the four governed
+# controls (privacy-notice / dsr-access / breach-72h / ropa) across
+# non_compliant / partial / not_assessed — where the rationale is rich and
+# real — plus high-severity not_assessed cases (security ART19, lawful-basis
+# ART5, cross-border ART29) whose behavioural value (does the model bind to the
+# control TITLE when the rationale is thin?) is exercised in C3, not the stub.
+#
+# Two layers kept apart (ADR-0010 §2):
+#   input   -> the GapContext (machine-generated, faithful).
+#   expect / quality_*  -> THE HUMAN LAYER. must_contain / must_not_contain are
+#       per-case Layer-A assertions; quality_score is the Layer-B human rating.
+#       BOTH are scored in C3 against the real model, NOT against the stub.
+#       They are intentionally EMPTY here for the engineer (Faisal) to fill:
+#         - must_contain:     substrings the explanation MUST include (e.g. the
+#                             specific gap, a sensible remediation step).
+#         - must_not_contain: substrings it MUST NOT include (e.g. any
+#                             compliance assertion, an out-of-scope claim).
+#         - quality_criteria: a one-line note of what "good" means for THIS gap
+#                             (right gap explained, sensible fix, clear Arabic).
+#         - quality_score:    leave null; rated 1-5 once in C3, never off a stub.
+
+version: 1
+cases:
+  # --- Privacy notice (PDPL-ART12, severity 7.0) — 3 statuses ---
+  - id: privacy-notice-non_compliant
+    input:
+      control_code: PDPL-ART12-PRIVACY-NOTICE
+      control_title_ar: "إفصاح إشعار الخصوصية لأصحاب البيانات"
+      control_description_ar: "يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع."
+      status: non_compliant
+      rationale: "privacy notice: none of 4 question(s) satisfied"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART12-NOTICE-EXISTS: "no"
+      Q-ART12-NOTICE-PURPOSES: "no"
+      Q-ART12-NOTICE-RECIPIENTS: "no"
+      Q-ART12-NOTICE-RIGHTS: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: privacy-notice-partial
+    input:
+      control_code: PDPL-ART12-PRIVACY-NOTICE
+      control_title_ar: "إفصاح إشعار الخصوصية لأصحاب البيانات"
+      control_description_ar: "يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع."
+      status: partial
+      rationale: "privacy notice: 2 of 4 question(s) satisfied; gap(s): Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART12-NOTICE-EXISTS: "yes"
+      Q-ART12-NOTICE-PURPOSES: "yes"
+      Q-ART12-NOTICE-RECIPIENTS: "no"
+      Q-ART12-NOTICE-RIGHTS: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: privacy-notice-not_assessed
+    input:
+      control_code: PDPL-ART12-PRIVACY-NOTICE
+      control_title_ar: "إفصاح إشعار الخصوصية لأصحاب البيانات"
+      control_description_ar: "يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع."
+      status: not_assessed
+      rationale: "privacy notice: not assessed — unanswered question(s): Q-ART12-NOTICE-PURPOSES, Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART12-NOTICE-EXISTS: "yes"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  # --- Right of access (PDPL-ART4-DSR-ACCESS, severity 7.0) — 3 statuses ---
+  - id: dsr-access-non_compliant
+    input:
+      control_code: PDPL-ART4-DSR-ACCESS
+      control_title_ar: "حق الوصول إلى البيانات الشخصية"
+      control_description_ar: "لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة."
+      status: non_compliant
+      rationale: "right of access: none of 2 question(s) satisfied"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART4-ACCESS-PROCESS: "no"
+      Q-ART4-ACCESS-TIMEFRAME: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: dsr-access-partial
+    input:
+      control_code: PDPL-ART4-DSR-ACCESS
+      control_title_ar: "حق الوصول إلى البيانات الشخصية"
+      control_description_ar: "لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة."
+      status: partial
+      rationale: "right of access: 1 of 2 question(s) satisfied; gap(s): Q-ART4-ACCESS-TIMEFRAME"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART4-ACCESS-PROCESS: "yes"
+      Q-ART4-ACCESS-TIMEFRAME: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: dsr-access-not_assessed
+    input:
+      control_code: PDPL-ART4-DSR-ACCESS
+      control_title_ar: "حق الوصول إلى البيانات الشخصية"
+      control_description_ar: "لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة."
+      status: not_assessed
+      rationale: "right of access: not assessed — unanswered question(s): Q-ART4-ACCESS-TIMEFRAME"
+      severity_weight: 7.0
+    source_answers:
+      Q-ART4-ACCESS-PROCESS: "yes"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  # --- Breach notification 72h (PDPL-ART20, severity 10.0) — 3 statuses ---
+  - id: breach-72h-non_compliant
+    input:
+      control_code: PDPL-ART20-BREACH-NOTIFY-72H
+      control_title_ar: "إشعار تسرب البيانات الشخصية خلال 72 ساعة"
+      control_description_ar: "في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر."
+      status: non_compliant
+      rationale: "breach notification (72h): none of 2 question(s) satisfied"
+      severity_weight: 10.0
+    source_answers:
+      Q-ART20-BREACH-PROCEDURE: "no"
+      Q-ART20-BREACH-72H: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: breach-72h-partial
+    input:
+      control_code: PDPL-ART20-BREACH-NOTIFY-72H
+      control_title_ar: "إشعار تسرب البيانات الشخصية خلال 72 ساعة"
+      control_description_ar: "في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر."
+      status: partial
+      rationale: "breach notification (72h): 1 of 2 question(s) satisfied; gap(s): Q-ART20-BREACH-72H"
+      severity_weight: 10.0
+    source_answers:
+      Q-ART20-BREACH-PROCEDURE: "yes"
+      Q-ART20-BREACH-72H: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: breach-72h-not_assessed
+    input:
+      control_code: PDPL-ART20-BREACH-NOTIFY-72H
+      control_title_ar: "إشعار تسرب البيانات الشخصية خلال 72 ساعة"
+      control_description_ar: "في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر."
+      status: not_assessed
+      rationale: "breach notification (72h): not assessed — unanswered question(s): Q-ART20-BREACH-72H"
+      severity_weight: 10.0
+    source_answers:
+      Q-ART20-BREACH-PROCEDURE: "yes"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  # --- Records of processing (PDPL-ART31-ROPA, severity 5.0) — single
+  # question, so no `partial`: only non_compliant and not_assessed. ---
+  - id: ropa-non_compliant
+    input:
+      control_code: PDPL-ART31-ROPA
+      control_title_ar: "سجل عمليات معالجة البيانات الشخصية"
+      control_description_ar: "يجب على جهة التحكم مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب."
+      status: non_compliant
+      rationale: "records of processing: none of 1 question(s) satisfied"
+      severity_weight: 5.0
+    source_answers:
+      Q-ART31-ROPA-MAINTAINED: "no"
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: ropa-not_assessed
+    input:
+      control_code: PDPL-ART31-ROPA
+      control_title_ar: "سجل عمليات معالجة البيانات الشخصية"
+      control_description_ar: "يجب على جهة التحكم مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب."
+      status: not_assessed
+      rationale: "records of processing: not assessed — unanswered question(s): Q-ART31-ROPA-MAINTAINED"
+      severity_weight: 5.0
+    source_answers: {}
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  # --- High-severity controls with no engine rule yet -> not_assessed with the
+  # generic rationale. These test that the model binds to the control TITLE when
+  # the rationale carries no specifics (behaviour exercised in C3, ADR-0010 §4). ---
+  - id: security-measures-not_assessed
+    input:
+      control_code: PDPL-ART19-SECURITY-MEASURES
+      control_title_ar: "التدابير الفنية والتنظيمية لحماية البيانات"
+      control_description_ar: "يجب على جهة التحكم اتخاذ التدابير الفنية والتنظيمية الملائمة لمستوى الخطر لحماية البيانات الشخصية من الوصول غير المصرح به والإفصاح والفقد والتعديل والإتلاف."
+      status: not_assessed
+      rationale: "no deterministic rule registered for this control yet"
+      severity_weight: 9.0
+    source_answers: {}
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: lawful-basis-not_assessed
+    input:
+      control_code: PDPL-ART5-LAWFUL-BASIS
+      control_title_ar: "الأساس النظامي لمعالجة البيانات الشخصية"
+      control_description_ar: "لا يجوز معالجة البيانات الشخصية إلا لغرض محدد ومعلن ومشروع، استناداً إلى أساس نظامي كالموافقة الصريحة أو تنفيذ عقد أو الالتزام بنص نظامي."
+      status: not_assessed
+      rationale: "no deterministic rule registered for this control yet"
+      severity_weight: 9.0
+    source_answers: {}
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null
+
+  - id: cross-border-not_assessed
+    input:
+      control_code: PDPL-ART29-CROSS-BORDER
+      control_title_ar: "نقل البيانات الشخصية خارج المملكة"
+      control_description_ar: "يستلزم نقل البيانات الشخصية خارج المملكة وجود أساس نظامي مناسب وضمانات كافية وفق الضوابط التي تحددها الجهة المختصة."
+      status: not_assessed
+      rationale: "no deterministic rule registered for this control yet"
+      severity_weight: 8.0
+    source_answers: {}
+    expect:
+      must_contain: []
+      must_not_contain: []
+    quality_criteria: ""
+    quality_score: null

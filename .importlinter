@@ -87,3 +87,25 @@ forbidden_modules =
     pdpl.services.decision
     pdpl.services.checks
     pdpl.services.scoring
+
+# Contract 5 (new, ADR-0010): the eval harness is TOOLING — it measures the
+# feature, it is never part of it. Nothing in production may import it, so the
+# eval cannot accidentally become a runtime dependency (and, e.g., drag pyyaml
+# or the golden-set file into the serving path). The eval freely imports
+# pdpl.ai (the stub) and pdpl.verification (the shared gate); only the reverse
+# is forbidden.
+[importlinter:contract:production-no-eval]
+name = Production code must not import the eval harness (eval is tooling)
+type = forbidden
+source_modules =
+    pdpl.ai
+    pdpl.api
+    pdpl.db
+    pdpl.explanations
+    pdpl.notifications
+    pdpl.observability
+    pdpl.services
+    pdpl.verification
+    pdpl.workers
+forbidden_modules =
+    pdpl.eval
