@@ -25,6 +25,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "import-linter>=2.0",
+    # The eval harness (pdpl.eval) is dev tooling; its golden set is YAML.
+    # pyyaml stays out of the production dependency set on purpose (ADR-0010).
+    "pyyaml>=6.0",
 ]
 
 [build-system]
