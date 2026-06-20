@@ -45,9 +45,9 @@ cases:
       Q-ART12-NOTICE-RECIPIENTS: "no"
       Q-ART12-NOTICE-RIGHTS: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الخصوصية", "أغراض", "حقوق"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
+    quality_criteria: "عربي واضح غير تقني؛ خطوة علاجية واحدة: نشر إشعار خصوصية يغطّي الأغراض والمستلمين ومدد الاحتفاظ والحقوق؛ بلا وعود مطلقة أو ضمان امتثال."
     quality_score: null
 
   - id: privacy-notice-partial
@@ -64,9 +64,9 @@ cases:
       Q-ART12-NOTICE-RECIPIENTS: "no"
       Q-ART12-NOTICE-RIGHTS: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الخصوصية", "المستلمة", "حقوق"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
+    quality_criteria: "خطوة واحدة: إضافة الجهات المستلمة وحقوق صاحب البيانات للإشعار؛ لا يدّعي نقص الأغراض (مُحقَّقة)؛ بلا مبالغة."
     quality_score: null
 
   - id: privacy-notice-not_assessed
@@ -80,9 +80,9 @@ cases:
     source_answers:
       Q-ART12-NOTICE-EXISTS: "yes"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الخصوصية", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
+    quality_criteria: "يوضّح بأمانة أن البند لم يُقيَّم آلياً لعدم اكتمال الإجابات ويحتاج مراجعة يدوية؛ بلا اختلاق ثغرة أو حكم."
     quality_score: null
 
   # --- Right of access (PDPL-ART4-DSR-ACCESS, severity 7.0) — 3 statuses ---
@@ -98,9 +98,9 @@ cases:
       Q-ART4-ACCESS-PROCESS: "no"
       Q-ART4-ACCESS-TIMEFRAME: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الوصول", "آلية", "الإطار الزمني"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
+    quality_criteria: "خطوة واحدة: إنشاء آلية لاستقبال طلبات الوصول وتحديد مهلة للرد؛ بلا ضمان."
     quality_score: null
 
   - id: dsr-access-partial
@@ -115,9 +115,9 @@ cases:
       Q-ART4-ACCESS-PROCESS: "yes"
       Q-ART4-ACCESS-TIMEFRAME: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الوصول", "الإطار الزمني", "الرد"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
+    quality_criteria: "خطوة واحدة: تحديد إطار زمني نظامي للرد؛ لا يدّعي غياب الآلية (موجودة)."
     quality_score: null
 
   - id: dsr-access-not_assessed
@@ -131,9 +131,9 @@ cases:
     source_answers:
       Q-ART4-ACCESS-PROCESS: "yes"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الوصول", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "تسرب"]
+    quality_criteria: "يوضّح بأمانة أن جانب مهلة الرد لم يُقيَّم لعدم الإجابة؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
     quality_score: null
 
   # --- Breach notification 72h (PDPL-ART20, severity 10.0) — 3 statuses ---
@@ -149,9 +149,9 @@ cases:
       Q-ART20-BREACH-PROCEDURE: "no"
       Q-ART20-BREACH-72H: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["تسرب", "الإبلاغ", "72"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
+    quality_criteria: "خطوة واحدة: إعداد مسودة إبلاغ جاهزة وآلية إخطار خلال 72 ساعة؛ بلا مبالغة."
     quality_score: null
 
   - id: breach-72h-partial
@@ -166,9 +166,9 @@ cases:
       Q-ART20-BREACH-PROCEDURE: "yes"
       Q-ART20-BREACH-72H: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["تسرب", "72", "ساعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
+    quality_criteria: "خطوة واحدة: ضبط الإخطار ليلتزم بمهلة 72 ساعة؛ لا يدّعي غياب الإجراء."
     quality_score: null
 
   - id: breach-72h-not_assessed
@@ -182,9 +182,9 @@ cases:
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "yes"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["تسرب", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "حق الوصول"]
+    quality_criteria: "أمانة: جانب الـ72 ساعة لم يُقيَّم؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
     quality_score: null
 
   # --- Records of processing (PDPL-ART31-ROPA, severity 5.0) — single
@@ -200,9 +200,9 @@ cases:
     source_answers:
       Q-ART31-ROPA-MAINTAINED: "no"
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["سجل", "أنشطة المعالجة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "إشعار الخصوصية"]
+    quality_criteria: "خطوة واحدة: إنشاء سجل أنشطة معالجة يوثّق الأغراض والفئات والمستلمين ومدد الاحتفاظ؛ بلا مبالغة."
     quality_score: null
 
   - id: ropa-not_assessed
@@ -215,9 +215,9 @@ cases:
       severity_weight: 5.0
     source_answers: {}
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["سجل", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
+    quality_criteria: "أمانة: لم يُقيَّم لعدم تقديم ما يكفي؛ خطوة واحدة: تجهيز السجل الداخلي للمراجعة اليدوية."
     quality_score: null
 
   # --- High-severity controls with no engine rule yet -> not_assessed with the
@@ -233,9 +233,9 @@ cases:
       severity_weight: 9.0
     source_answers: {}
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["التدابير الفنية", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تشفير", "اختراق"]
+    quality_criteria: "يربط بعنوان الضابط فقط، يوضّح عدم التقييم والحاجة لمراجعة يدوية؛ بلا اختلاق أي ثغرة أمنية محدّدة."
     quality_score: null
 
   - id: lawful-basis-not_assessed
@@ -248,9 +248,9 @@ cases:
       severity_weight: 9.0
     source_answers: {}
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["الأساس النظامي", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "بدون مسوّغ", "تسرب"]
+    quality_criteria: "يربط بالعنوان، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة مثل (تجمع بيانات بدون أساس)؛ حياد تام."
     quality_score: null
 
   - id: cross-border-not_assessed
@@ -263,7 +263,7 @@ cases:
       severity_weight: 8.0
     source_answers: {}
     expect:
-      must_contain: []
-      must_not_contain: []
-    quality_criteria: ""
+      must_contain: ["نقل البيانات", "خارج المملكة", "مراجعة"]
+      must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تنقل بدون", "تسرب"]
+    quality_criteria: "يربط بعنوان النقل خارج المملكة، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة نقل."
     quality_score: null
