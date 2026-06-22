@@ -20,8 +20,9 @@ from importing the decision core.
 
 from __future__ import annotations
 
+from pdpl.catalog import prompts_ar_for
 from pdpl.eval.golden_set import load_golden_set
-from pdpl.services.decision import build_deterministic_decider
+from pdpl.services.decision import build_control_decider, build_deterministic_decider
 
 
 def test_every_case_rationale_is_faithful_engine_output() -> None:
@@ -32,6 +33,34 @@ def test_every_case_rationale_is_faithful_engine_output() -> None:
         status, rationale = decide(case.gap.control_code)
         assert status == case.gap.status, f"{case.id}: status drifted"
         assert rationale == case.gap.rationale, f"{case.id}: rationale drifted"
+
+
+def test_unsatisfied_questions_ar_is_faithful_to_engine_and_catalog() -> None:
+    """The C3a grounding guard: rebuild each case's `unsatisfied_questions_ar`
+    from the engine's STRUCTURED `unsatisfied_codes` joined through the catalogue
+    — the exact path the C4 runtime feeds the model — and require LITERAL
+    equality with the stored field. No string-parsing, no hand-typed text."""
+    for case in load_golden_set():
+        decide = build_control_decider(case.source_answers)
+        decision = decide(case.gap.control_code)
+        rebuilt = prompts_ar_for(decision.unsatisfied_codes)
+        assert rebuilt == case.gap.unsatisfied_questions_ar, (
+            f"{case.id}: unsatisfied_questions_ar drifted from engine+catalog"
+        )
+
+
+def test_no_rule_controls_have_no_unsatisfied_questions() -> None:
+    """The three high-severity controls with no engine rule carry no questions,
+    so the field is empty and the model must bind to the control TITLE alone
+    (ADR-0010 §4)."""
+    no_rule = {
+        c.id for c in load_golden_set()
+        if c.gap.rationale == "no deterministic rule registered for this control yet"
+    }
+    assert no_rule, "expected at least one no-rule case in the corpus"
+    for case in load_golden_set():
+        if case.id in no_rule:
+            assert case.gap.unsatisfied_questions_ar == ()
 
 
 def test_golden_set_is_the_agreed_size() -> None:

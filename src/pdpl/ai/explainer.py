@@ -40,6 +40,15 @@ class GapContext:
     status: str  # the deterministic verdict (non_compliant / partial / ...)
     rationale: str  # deterministic "what made the status what it is" (ADR-0006)
     severity_weight: float  # the control's weight (ADR-0007)
+    # The READABLE Arabic text of the unsatisfied/unanswered questions behind
+    # this gap (C3a). The `rationale` only carries cryptic question CODES (e.g.
+    # "gap(s): Q-ART12-NOTICE-RECIPIENTS"); without the text the model would
+    # have to decode them and could explain the wrong gap. The C4 runtime fills
+    # this from the engine's structured `unsatisfied_codes` via
+    # `pdpl.catalog.prompts_ar_for`; it is empty for controls with no rule (the
+    # model then binds to the control TITLE alone). Still tenant-agnostic — this
+    # is static control metadata, never a tenant answer or PII.
+    unsatisfied_questions_ar: tuple[str, ...] = ()
     lang: str = "ar"  # output language; MVP is Arabic-only
 
 

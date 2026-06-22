@@ -14,6 +14,15 @@
 # ART5, cross-border ART29) whose behavioural value (does the model bind to the
 # control TITLE when the rationale is thin?) is exercised in C3, not the stub.
 #
+# The input's `unsatisfied_questions_ar` is also PROVABLY FAITHFUL, not
+# hand-typed: it is the readable Arabic text of the gap's unsatisfied/unanswered
+# questions, generated from the engine's structured `unsatisfied_codes` joined
+# through `pdpl.catalog.prompts_ar_for` — the exact path the C4 runtime uses to
+# ground the model. tests/test_eval_golden_set.py rebuilds it and asserts
+# literal equality, so it cannot drift from what production will send. The three
+# controls with no engine rule (security / lawful-basis / cross-border) have no
+# questions, so the field is [] and the model binds to the control TITLE alone.
+#
 # Two layers kept apart (ADR-0010 §2):
 #   input   -> the GapContext (machine-generated, faithful).
 #   expect / quality_*  -> THE HUMAN LAYER. must_contain / must_not_contain are
@@ -39,6 +48,11 @@ cases:
       status: non_compliant
       rationale: "privacy notice: none of 4 question(s) satisfied"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تنشر إشعار خصوصية لأصحاب البيانات قبل جمع بياناتهم الشخصية؟"
+        - "هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟"
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "no"
       Q-ART12-NOTICE-PURPOSES: "no"
@@ -58,6 +72,9 @@ cases:
       status: partial
       rationale: "privacy notice: 2 of 4 question(s) satisfied; gap(s): Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "yes"
       Q-ART12-NOTICE-PURPOSES: "yes"
@@ -77,6 +94,10 @@ cases:
       status: not_assessed
       rationale: "privacy notice: not assessed — unanswered question(s): Q-ART12-NOTICE-PURPOSES, Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟"
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "yes"
     expect:
@@ -94,6 +115,9 @@ cases:
       status: non_compliant
       rationale: "right of access: none of 2 question(s) satisfied"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل لديك إجراء موثّق للتعامل مع طلبات وصول أصحاب البيانات إلى بياناتهم؟"
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "no"
       Q-ART4-ACCESS-TIMEFRAME: "no"
@@ -111,6 +135,8 @@ cases:
       status: partial
       rationale: "right of access: 1 of 2 question(s) satisfied; gap(s): Q-ART4-ACCESS-TIMEFRAME"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "yes"
       Q-ART4-ACCESS-TIMEFRAME: "no"
@@ -128,6 +154,8 @@ cases:
       status: not_assessed
       rationale: "right of access: not assessed — unanswered question(s): Q-ART4-ACCESS-TIMEFRAME"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "yes"
     expect:
@@ -145,6 +173,9 @@ cases:
       status: non_compliant
       rationale: "breach notification (72h): none of 2 question(s) satisfied"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل لديك إجراء موثّق للاستجابة لتسرب البيانات الشخصية؟"
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "no"
       Q-ART20-BREACH-72H: "no"
@@ -162,6 +193,8 @@ cases:
       status: partial
       rationale: "breach notification (72h): 1 of 2 question(s) satisfied; gap(s): Q-ART20-BREACH-72H"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "yes"
       Q-ART20-BREACH-72H: "no"
@@ -179,6 +212,8 @@ cases:
       status: not_assessed
       rationale: "breach notification (72h): not assessed — unanswered question(s): Q-ART20-BREACH-72H"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "yes"
     expect:
@@ -197,6 +232,8 @@ cases:
       status: non_compliant
       rationale: "records of processing: none of 1 question(s) satisfied"
       severity_weight: 5.0
+      unsatisfied_questions_ar:
+        - "هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟"
     source_answers:
       Q-ART31-ROPA-MAINTAINED: "no"
     expect:
@@ -213,6 +250,8 @@ cases:
       status: not_assessed
       rationale: "records of processing: not assessed — unanswered question(s): Q-ART31-ROPA-MAINTAINED"
       severity_weight: 5.0
+      unsatisfied_questions_ar:
+        - "هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟"
     source_answers: {}
     expect:
       must_contain: ["سجل", "مراجعة"]
@@ -231,6 +270,7 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 9.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["التدابير الفنية", "مراجعة"]
@@ -246,6 +286,7 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 9.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["الأساس النظامي", "مراجعة"]
@@ -261,6 +302,7 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 8.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["نقل البيانات", "خارج المملكة", "مراجعة"]
