@@ -24,6 +24,28 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
+class ExplainerError(Exception):
+    """Base error raised by a real Explainer when it cannot produce output.
+
+    Mirrors the Notifier taxonomy (ADR-0008 / `pdpl.notifications.port`):
+    `TransientExplainerError` -> retry with backoff (bounded by max_attempts);
+    `PermanentExplainerError` -> do not retry. A failure the Explainer cannot
+    classify is raised as this base type and treated as transient (bounded).
+    On exhausted retries or a permanent failure, the C4 orchestration falls
+    back to the deterministic `rationale` — a failed call is never a failed
+    request (ADR-0009 §5).
+    """
+
+
+class TransientExplainerError(ExplainerError):
+    """A retry-worthy failure: timeout, connection error, HTTP 5xx or 429."""
+
+
+class PermanentExplainerError(ExplainerError):
+    """A non-retryable failure: HTTP 4xx (other than 429), or a malformed
+    response the Explainer cannot parse."""
+
+
 @dataclass(frozen=True)
 class GapContext:
     """The non-personal facts of one gap, handed to an `Explainer` (ADR-0009 §2).
