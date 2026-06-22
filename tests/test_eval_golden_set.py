@@ -83,12 +83,20 @@ def test_case_ids_are_unique() -> None:
     assert len(ids) == len(set(ids)), "golden-set case ids must be unique"
 
 
-def test_human_expectation_fields_are_present_and_unrated_in_c2() -> None:
-    """The Layer-B / per-case structure is version-controlled now; the values
-    are filled and rated in C3, never faked off the stub (ADR-0010 §2). Here we
-    only assert the fields EXIST and carry no fabricated rating."""
+def test_human_expectation_fields_are_present() -> None:
+    """The Layer-B / per-case structure is version-controlled and the
+    expectation lists exist for every case (ADR-0010 §2)."""
     for case in load_golden_set():
         assert isinstance(case.must_contain, list)
         assert isinstance(case.must_not_contain, list)
-        # No quality_score may be invented against a stub.
-        assert case.quality_score is None, f"{case.id}: quality_score must be unrated in C2"
+
+
+def test_quality_scores_are_rated_and_pinned_to_a_run() -> None:
+    """C3 inverts the C2 'unrated' invariant: every case now carries a human
+    Layer-B rating (1-5) pinned to the run artifact it was rated against
+    (`quality_score_run`), so a re-run can never silently invalidate it
+    (ADR-0010 §3). A rating without its provenance pointer is rejected."""
+    for case in load_golden_set():
+        assert case.quality_score is not None, f"{case.id}: quality_score unrated"
+        assert 1 <= case.quality_score <= 5, f"{case.id}: score out of 1-5"
+        assert case.quality_score_run, f"{case.id}: rating missing its run provenance"

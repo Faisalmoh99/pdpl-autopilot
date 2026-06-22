@@ -95,7 +95,41 @@ The second run was clean (14 complete, zero errors, all `STOP`) and gave the fir
 
 ## Lessons (Faisal)
 
-_Placeholder — filled after I rate `quality_score` against the bound-corrected v1 run._
+1. Deterministic content metrics are blind to Arabic lexical flexibility.
+
+must_expectations_rate = 0.43 is not a model failure and not a misleading number — it is an honest
+diagnostic measuring exactly what it was built to measure: literal agreement with the golden set's
+keywords. The discipline is in reading it correctly. In this sample, the model expressed the right
+gaps using natural commercial synonyms ("إجراء موثق" for "آلية", "سجل لعمليات المعالجة" for
+"أنشطة المعالجة"), which substring matching scores as misses. The lesson: for Arabic regulatory
+explanation, rigid substring matching penalizes high-quality output, so a deterministic content
+metric undercounts quality. The human quality_score is the load-bearing signal precisely because
+the deterministic metric is synonym-blind. (Semantic-similarity scoring is a possible future
+improvement, not a present claim.)
+
+2. Strict negative keyword rules carry a context blind spot.
+
+The security-measures case tripped the must_not_contain "تشفير" rule — but the model did not
+fabricate an encryption gap; it named encryption as an EXAMPLE of what to review manually. The
+matcher punished the bare word regardless of context. The lesson: a literal denylist cannot tell
+"asserts a specific gap" from "offers a review example the user needs." The cheaper v2 fix is to
+narrow the negative expectation to forbid FABRICATING a gap, not mentioning an example;
+context-aware inference (NLI) is a heavier option, deferred.
+
+3. Structured input reduces hallucination; the gate — not the model — is the guarantee.
+
+On this sample, constraining the model to the unsatisfied_questions_ar array correlated with
+honest behavior on the not_assessed cases: it stayed neutral ("لم يُقيَّم، يحتاج مراجعة") and did
+not fabricate violations, including the three no-rule controls (the highest hallucination risk).
+But this is measured model BEHAVIOR on one non-deterministic sample, not a safety guarantee. The
+guarantee remains architectural: the runtime gate rejects unsafe output regardless of what the
+model produces (proven by the C1 keystone). Structured grounding makes good behavior more likely;
+the gate makes safety certain. Conflating "the model behaved safely here" with "safety is
+guaranteed" is the exact gate-vs-metric error ADR-0010 §1 corrects.
+
+This run reframed baseline v1: not a numeric failure in the metrics' eyes, but evidence that the
+deterministic content metric undercounts a capable model — and a clear list of what to fix in the
+harness for v2 (synonym-aware content checks; context-aware negative rules).
 
 ## Next
 

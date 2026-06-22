@@ -243,6 +243,27 @@ async def test_explainer_failure_is_recorded_not_raised() -> None:
     assert "simulated model failure" in r.error
 
 
-def test_mean_quality_score_is_none_until_rated() -> None:
+def test_mean_quality_score_aggregates_the_human_ratings() -> None:
+    """The Layer-B aggregate over the golden set, now that C3 has rated every
+    case against a real run artifact (ADR-0010 §3)."""
     cases = load_golden_set()
-    assert harness.mean_quality_score(cases) is None  # unrated in C3a
+    mean = harness.mean_quality_score(cases)
+    assert mean is not None
+    expected = sum(c.quality_score for c in cases) / len(cases)
+    assert mean == expected
+
+
+def test_mean_quality_score_is_none_when_no_case_is_rated() -> None:
+    """The function still returns None for an unrated set — the invariant the
+    stub relied on, kept as a unit of the aggregate itself."""
+    from pdpl.ai.explainer import GapContext
+    unrated = [
+        GoldenCase(
+            id="x",
+            gap=GapContext(
+                control_code="C", control_title_ar="ع", control_description_ar="ع",
+                status="non_compliant", rationale="r", severity_weight=1.0,
+            ),
+        )
+    ]
+    assert harness.mean_quality_score(unrated) is None
