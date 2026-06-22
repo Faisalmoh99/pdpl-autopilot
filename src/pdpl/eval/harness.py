@@ -39,6 +39,26 @@ from pdpl.verification import verify_explanation
 
 
 @dataclass(frozen=True)
+class CaseResult:
+    """One case's full result — the raw output and every signal scored on it.
+
+    Carries the raw model `candidate` so the manual run can dump it into the
+    human-review artifact (the Layer-B rating, ADR-0010 §2, is done against THIS
+    exact text). `error` is set instead of `candidate` when the explainer raised
+    (a real-model failure), so one failing case never aborts the whole run.
+    """
+
+    id: str
+    candidate: str | None
+    gate_passed: bool
+    checks: dict[str, bool]
+    must_contain_missing: tuple[str, ...]
+    must_not_contain_present: tuple[str, ...]
+    must_expectations_passed: bool
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class EvalMetrics:
     """The Layer-A result of one harness run over a set of cases (ADR-0010 §3).
 
@@ -46,12 +66,24 @@ class EvalMetrics:
     passing the whole gate). `per_check_rates` is the per-check breakdown that
     explains WHICH check drags the headline down, keyed by the ADR-0010 §3
     metric names (`no_compliance_assertion_rate`, `references_control_rate`,
-    `arabic_rate`, `within_length_bounds_rate`). All exact and reproducible.
+    `arabic_rate`, `within_length_bounds_rate`).
+
+    `must_expectations_rate` is a DETERMINISTIC content-fidelity DIAGNOSTIC
+    (ADR-0010 §3): the fraction of cases whose raw output contains every
+    `must_contain` substring and none of the `must_not_contain` substrings.
+    It is auto-scored (Layer-A trust) but it is NOT a gate or safety metric and
+    NOT a release gate — the runtime gate guarantees safety; this measures how
+    faithfully the output matches the golden set's per-case expectations.
+
+    All numbers are exact for a given set of `case_results`; against the REAL
+    model a single run is one non-deterministic sample (a point estimate).
     """
 
     n_cases: int
     gate_pass_rate: float
     per_check_rates: dict[str, float]
+    must_expectations_rate: float = 0.0
+    case_results: tuple[CaseResult, ...] = ()
 
 
 def _rate(count: int, total: int) -> float:
@@ -59,30 +91,72 @@ def _rate(count: int, total: int) -> float:
     return count / total if total else 0.0
 
 
+def _score_case(case: GoldenCase, candidate: str) -> tuple[dict[str, bool], bool, tuple[str, ...], tuple[str, ...], bool]:
+    """Run the shared gate + the per-case must-expectations on one raw output."""
+    ctx = case.gap
+    verdict = verify_explanation(
+        candidate,
+        control_code=ctx.control_code,
+        control_title_ar=ctx.control_title_ar,
+    )
+    checks = {name: result.passed for name, result in verdict.checks.items()}
+    missing = tuple(s for s in case.must_contain if s not in candidate)
+    present = tuple(s for s in case.must_not_contain if s in candidate)
+    must_passed = not missing and not present
+    return checks, verdict.passed, missing, present, must_passed
+
+
 async def run(explainer: Explainer, cases: Sequence[GoldenCase]) -> EvalMetrics:
-    """Measure `explainer` over `cases` and return the Layer-A metrics.
+    """Measure `explainer` over `cases` and return the Layer-A metrics + the
+    per-case records.
 
     Pure of I/O beyond the explainer call: no DB, no network of its own. For a
-    `StubExplainer` it is fully deterministic and offline, which is what lets
-    the eval run and produce numbers before any real LLM exists (ADR-0010 §1).
+    `StubExplainer` it is fully deterministic and offline (ADR-0010 §1). Against
+    the real model, an explainer failure on a case is caught and recorded as a
+    failing `CaseResult` rather than aborting the run, so a costed run always
+    yields a complete picture.
     """
+    results: list[CaseResult] = []
     passed = 0
-    # Per-check PASS counts, accumulated across cases and keyed by the verdict's
-    # own check names so the breakdown follows the verifier, not a hardcoded list.
+    must_passed_count = 0
     check_pass_counts: dict[str, int] = {}
 
     for case in cases:
-        ctx = case.gap
-        candidate = await explainer.explain(ctx)
-        verdict = verify_explanation(
-            candidate,
-            control_code=ctx.control_code,
-            control_title_ar=ctx.control_title_ar,
-        )
-        if verdict.passed:
+        try:
+            candidate = await explainer.explain(case.gap)
+        except Exception as exc:  # real-model failure — record, do not abort
+            results.append(
+                CaseResult(
+                    id=case.id,
+                    candidate=None,
+                    gate_passed=False,
+                    checks={},
+                    must_contain_missing=tuple(case.must_contain),
+                    must_not_contain_present=(),
+                    must_expectations_passed=False,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            )
+            continue
+
+        checks, gate_passed, missing, present, must_passed = _score_case(case, candidate)
+        if gate_passed:
             passed += 1
-        for name, result in verdict.checks.items():
-            check_pass_counts[name] = check_pass_counts.get(name, 0) + int(result.passed)
+        if must_passed:
+            must_passed_count += 1
+        for name, ok in checks.items():
+            check_pass_counts[name] = check_pass_counts.get(name, 0) + int(ok)
+        results.append(
+            CaseResult(
+                id=case.id,
+                candidate=candidate,
+                gate_passed=gate_passed,
+                checks=checks,
+                must_contain_missing=missing,
+                must_not_contain_present=present,
+                must_expectations_passed=must_passed,
+            )
+        )
 
     total = len(cases)
     return EvalMetrics(
@@ -92,7 +166,17 @@ async def run(explainer: Explainer, cases: Sequence[GoldenCase]) -> EvalMetrics:
             f"{name}_rate": _rate(count, total)
             for name, count in check_pass_counts.items()
         },
+        must_expectations_rate=_rate(must_passed_count, total),
+        case_results=tuple(results),
     )
+
+
+def mean_quality_score(cases: Sequence[GoldenCase]) -> float | None:
+    """The Layer-B aggregate: the mean human `quality_score` over rated cases
+    (ADR-0010 §3). Returns None until any case is rated — quality_score is filled
+    by the engineer against a real run artifact, never off a stub (ADR-0010 §2)."""
+    rated = [c.quality_score for c in cases if c.quality_score is not None]
+    return sum(rated) / len(rated) if rated else None
 
 
 def format_report(results: dict[str, EvalMetrics]) -> str:
@@ -109,7 +193,11 @@ def format_report(results: dict[str, EvalMetrics]) -> str:
 
     names = list(results)
     first = results[names[0]]
-    metric_rows = ["gate_pass_rate", *first.per_check_rates.keys()]
+    metric_rows = [
+        "gate_pass_rate",
+        *first.per_check_rates.keys(),
+        "must_expectations_rate",
+    ]
 
     label_w = max(len(m) for m in metric_rows)
     col_w = max(12, *(len(n) for n in names))
@@ -117,6 +205,8 @@ def format_report(results: dict[str, EvalMetrics]) -> str:
     def _value(metrics: EvalMetrics, metric: str) -> float:
         if metric == "gate_pass_rate":
             return metrics.gate_pass_rate
+        if metric == "must_expectations_rate":
+            return metrics.must_expectations_rate
         return metrics.per_check_rates[metric]
 
     header = "metric".ljust(label_w) + "  " + "".join(n.rjust(col_w + 2) for n in names)
@@ -139,7 +229,12 @@ def format_report(results: dict[str, EvalMetrics]) -> str:
         "  - references_control_rate is low here as a STUB ARTIFACT — a",
         "    fixed-output stub cannot ground itself to many different controls;",
         "    a real model is measured in C3.",
-        "  - quality_score and must_contain/must_not_contain (Layer B) are NOT",
-        "    meaningfully exercisable against a stub and are deferred to C3.",
+        "  - must_expectations_rate is a deterministic CONTENT-FIDELITY",
+        "    diagnostic (Layer A), NOT a gate or safety metric: it measures how",
+        "    faithfully the output matches the golden set's per-case expectations.",
+        "    Against a fixed stub it is a stub artifact; it is meaningful against",
+        "    the real model (C3).",
+        "  - quality_score (Layer B) is human-rated against a real run artifact,",
+        "    never off a stub (ADR-0010 §2).",
     ]
     return "\n".join(lines)

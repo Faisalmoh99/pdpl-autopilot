@@ -54,6 +54,10 @@ class GoldenCase:
     source_answers: dict[str, str] = field(default_factory=dict)
     quality_criteria: str = ""
     quality_score: float | None = None
+    # Provenance: the run id of the artifact this score was rated against. A
+    # rating without it is orphaned — a re-run would silently invalidate it
+    # (ADR-0010 §3, C3). Null until the case is rated.
+    quality_score_run: str | None = None
 
 
 def load_golden_set(path: Path = _DEFAULT_PATH) -> list[GoldenCase]:
@@ -81,6 +85,7 @@ def load_golden_set(path: Path = _DEFAULT_PATH) -> list[GoldenCase]:
                 source_answers=dict(entry.get("source_answers") or {}),
                 quality_criteria=entry.get("quality_criteria") or "",
                 quality_score=entry.get("quality_score"),
+                quality_score_run=entry.get("quality_score_run"),
             )
         )
     return cases
