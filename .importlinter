@@ -74,12 +74,13 @@ forbidden_modules =
     litellm
     langchain
 
-# Contract 4 (new, ADR-0009 §7): the verifier must also be independent of the
-# decision core. It consumes only the minimal control facts passed as plain
-# arguments, never the decision machinery — so it cannot drift toward
-# re-deciding instead of verifying.
+# Contract 4 (ADR-0009 §7 + C3a): the verifier must also be independent of the
+# decision core AND the seed catalogue. It consumes only the minimal control
+# facts passed as plain arguments, never the decision machinery and never the
+# catalogue's data — so it stays hermetic and cannot drift toward re-deciding
+# (or re-grounding) instead of verifying.
 [importlinter:contract:verification-no-decision-core]
-name = Verification gate must not import the deterministic decision core
+name = Verification gate must not import the decision core or the catalogue
 type = forbidden
 source_modules =
     pdpl.verification
@@ -87,6 +88,7 @@ forbidden_modules =
     pdpl.services.decision
     pdpl.services.checks
     pdpl.services.scoring
+    pdpl.catalog
 
 # Contract 5 (new, ADR-0010): the eval harness is TOOLING — it measures the
 # feature, it is never part of it. Nothing in production may import it, so the
@@ -100,6 +102,7 @@ type = forbidden
 source_modules =
     pdpl.ai
     pdpl.api
+    pdpl.catalog
     pdpl.db
     pdpl.explanations
     pdpl.notifications
@@ -109,3 +112,20 @@ source_modules =
     pdpl.workers
 forbidden_modules =
     pdpl.eval
+
+# Contract 6 (C3a, ADR-0009 §2): the seed catalogue is a PURE LEAF. It holds
+# static, tenant-agnostic control/question metadata and the readable-text join
+# the explainer is grounded on; it must depend on nothing inside the product.
+# Keeping it a leaf is what lets BOTH the eval tooling and the future C4 app
+# layer import it without pulling in the decision core, the AI layer, or the
+# verifier — and guarantees the catalogue can never reach back into a verdict.
+[importlinter:contract:catalog-is-a-leaf]
+name = Seed catalogue must be a pure leaf (no AI, decision core, or verifier)
+type = forbidden
+source_modules =
+    pdpl.catalog
+forbidden_modules =
+    pdpl.ai
+    pdpl.services
+    pdpl.verification
+    pdpl.explanations

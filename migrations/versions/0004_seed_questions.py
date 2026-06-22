@@ -37,6 +37,7 @@ Create Date: 2026-06-13
 """
 from __future__ import annotations
 
+import uuid
 from typing import Sequence, Union
 
 from alembic import op
@@ -50,19 +51,93 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-# Single source of truth for the question codes we seed. Used by both
-# upgrade (INSERT) and downgrade (DELETE WHERE code IN (...)) so the
-# downgrade removes EXACTLY what the upgrade added — never user-added rows.
-_SEED_QUESTION_CODES: tuple[str, ...] = (
-    "Q-ART12-NOTICE-EXISTS",
-    "Q-ART12-NOTICE-PURPOSES",
-    "Q-ART12-NOTICE-RECIPIENTS",
-    "Q-ART12-NOTICE-RIGHTS",
-    "Q-ART4-ACCESS-PROCESS",
-    "Q-ART4-ACCESS-TIMEFRAME",
-    "Q-ART20-BREACH-PROCEDURE",
-    "Q-ART20-BREACH-72H",
-    "Q-ART31-ROPA-MAINTAINED",
+# FROZEN seed literals — the single, self-contained source this migration
+# inserts from. Each row mirrors the literal columns seeded into `questions`:
+# (control_code, code, prompt_en, prompt_ar, display_order). `id` is generated
+# and `answer_type` uses the column's server default, so neither is a literal.
+#
+# This migration stays REPLAYABLE and self-contained: it deliberately does NOT
+# import `pdpl.catalog`. The catalogue is the authoritative copy for the
+# running app; `tests/test_catalog_seed_drift.py` pins the two together VERBATIM
+# (and pins THIS constant against a frozen golden of the originally-seeded
+# values), so the C3a restructure to a parameterized insert is a PROVEN
+# row-preserving change, not an asserted one. Alembic keys on the revision id,
+# so an already-applied database never re-runs this body.
+_SEED_QUESTIONS: tuple[tuple[str, str, str, str, int], ...] = (
+    # PDPL-ART12-PRIVACY-NOTICE — 4 questions (can drive a 'partial').
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Q-ART12-NOTICE-EXISTS",
+        "Do you publish a privacy notice to data subjects before collecting their personal data?",
+        "هل تنشر إشعار خصوصية لأصحاب البيانات قبل جمع بياناتهم الشخصية؟",
+        1,
+    ),
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Q-ART12-NOTICE-PURPOSES",
+        "Does the privacy notice state the purposes for which personal data is processed?",
+        "هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟",
+        2,
+    ),
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Q-ART12-NOTICE-RECIPIENTS",
+        "Does the privacy notice identify the recipients or categories of recipients of the data?",
+        "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟",
+        3,
+    ),
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Q-ART12-NOTICE-RIGHTS",
+        "Does the privacy notice explain the data subject's rights and how to exercise them?",
+        "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟",
+        4,
+    ),
+    # PDPL-ART4-DSR-ACCESS — 2 questions.
+    (
+        "PDPL-ART4-DSR-ACCESS",
+        "Q-ART4-ACCESS-PROCESS",
+        "Do you have a documented process for handling data-subject access requests?",
+        "هل لديك إجراء موثّق للتعامل مع طلبات وصول أصحاب البيانات إلى بياناتهم؟",
+        1,
+    ),
+    (
+        "PDPL-ART4-DSR-ACCESS",
+        "Q-ART4-ACCESS-TIMEFRAME",
+        "Do you respond to access requests within a defined timeframe?",
+        "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟",
+        2,
+    ),
+    # PDPL-ART20-BREACH-NOTIFY-72H — 2 questions.
+    (
+        "PDPL-ART20-BREACH-NOTIFY-72H",
+        "Q-ART20-BREACH-PROCEDURE",
+        "Do you have a documented personal-data breach response procedure?",
+        "هل لديك إجراء موثّق للاستجابة لتسرب البيانات الشخصية؟",
+        1,
+    ),
+    (
+        "PDPL-ART20-BREACH-NOTIFY-72H",
+        "Q-ART20-BREACH-72H",
+        "Does the procedure commit to notifying the competent authority within 72 hours of becoming aware of a breach?",
+        "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟",
+        2,
+    ),
+    # PDPL-ART31-ROPA — 1 question.
+    (
+        "PDPL-ART31-ROPA",
+        "Q-ART31-ROPA-MAINTAINED",
+        "Do you maintain a record of personal-data processing activities (RoPA)?",
+        "هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟",
+        1,
+    ),
+)
+
+# Derived from the frozen rows so it can never drift from them. Used by both
+# upgrade (the seed) and downgrade (DELETE WHERE code IN (...)) so the downgrade
+# removes EXACTLY what the upgrade added — never user-added rows.
+_SEED_QUESTION_CODES: tuple[str, ...] = tuple(
+    code for (_control_code, code, _en, _ar, _order) in _SEED_QUESTIONS
 )
 
 
@@ -127,93 +202,43 @@ def upgrade() -> None:
     )
 
     # ------------------------------------------------------------------
-    # 3. Seed the starter questions. control_id resolves by control code,
-    #    so the seed is independent of the controls' (v4) UUIDs. id uses
-    #    gen_random_uuid() per the migration-insert convention; the natural
-    #    key is `code` and the downgrade matches on it.
+    # 3. Seed the starter questions from the frozen `_SEED_QUESTIONS` rows via
+    #    a PARAMETERIZED bulk insert: the driver binds every value, so the
+    #    Arabic text and the lone English apostrophe are encoded correctly
+    #    without any hand-escaping. control_id is resolved by control code into
+    #    a Python map (independent of the controls' v4 UUIDs); id is generated
+    #    here per the migration-insert convention. The natural key is `code`
+    #    and the downgrade matches on it.
     # ------------------------------------------------------------------
-    op.execute(
-        """
-        INSERT INTO questions (
-            id, control_id, code, prompt_en, prompt_ar, display_order
-        ) VALUES
-        -- PDPL-ART12-PRIVACY-NOTICE — 4 questions (can drive a 'partial').
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART12-PRIVACY-NOTICE'),
-            'Q-ART12-NOTICE-EXISTS',
-            'Do you publish a privacy notice to data subjects before collecting their personal data?',
-            'هل تنشر إشعار خصوصية لأصحاب البيانات قبل جمع بياناتهم الشخصية؟',
-            1
-        ),
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART12-PRIVACY-NOTICE'),
-            'Q-ART12-NOTICE-PURPOSES',
-            'Does the privacy notice state the purposes for which personal data is processed?',
-            'هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟',
-            2
-        ),
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART12-PRIVACY-NOTICE'),
-            'Q-ART12-NOTICE-RECIPIENTS',
-            'Does the privacy notice identify the recipients or categories of recipients of the data?',
-            'هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟',
-            3
-        ),
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART12-PRIVACY-NOTICE'),
-            'Q-ART12-NOTICE-RIGHTS',
-            'Does the privacy notice explain the data subject''s rights and how to exercise them?',
-            'هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟',
-            4
-        ),
-        -- PDPL-ART4-DSR-ACCESS — 2 questions.
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART4-DSR-ACCESS'),
-            'Q-ART4-ACCESS-PROCESS',
-            'Do you have a documented process for handling data-subject access requests?',
-            'هل لديك إجراء موثّق للتعامل مع طلبات وصول أصحاب البيانات إلى بياناتهم؟',
-            1
-        ),
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART4-DSR-ACCESS'),
-            'Q-ART4-ACCESS-TIMEFRAME',
-            'Do you respond to access requests within a defined timeframe?',
-            'هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟',
-            2
-        ),
-        -- PDPL-ART20-BREACH-NOTIFY-72H — 2 questions.
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART20-BREACH-NOTIFY-72H'),
-            'Q-ART20-BREACH-PROCEDURE',
-            'Do you have a documented personal-data breach response procedure?',
-            'هل لديك إجراء موثّق للاستجابة لتسرب البيانات الشخصية؟',
-            1
-        ),
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART20-BREACH-NOTIFY-72H'),
-            'Q-ART20-BREACH-72H',
-            'Does the procedure commit to notifying the competent authority within 72 hours of becoming aware of a breach?',
-            'هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟',
-            2
-        ),
-        -- PDPL-ART31-ROPA — 1 question.
-        (
-            gen_random_uuid(),
-            (SELECT id FROM controls WHERE code = 'PDPL-ART31-ROPA'),
-            'Q-ART31-ROPA-MAINTAINED',
-            'Do you maintain a record of personal-data processing activities (RoPA)?',
-            'هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟',
-            1
-        );
-        """
+    bind = op.get_bind()
+    control_id_by_code = {
+        row.code: row.id
+        for row in bind.execute(sa.text("SELECT code, id FROM controls")).all()
+    }
+
+    questions_table = sa.table(
+        "questions",
+        sa.column("id", postgresql.UUID(as_uuid=True)),
+        sa.column("control_id", postgresql.UUID(as_uuid=True)),
+        sa.column("code", sa.Text()),
+        sa.column("prompt_en", sa.Text()),
+        sa.column("prompt_ar", sa.Text()),
+        sa.column("display_order", sa.Integer()),
+    )
+    op.bulk_insert(
+        questions_table,
+        [
+            {
+                "id": uuid.uuid4(),
+                "control_id": control_id_by_code[control_code],
+                "code": code,
+                "prompt_en": prompt_en,
+                "prompt_ar": prompt_ar,
+                "display_order": display_order,
+            }
+            for (control_code, code, prompt_en, prompt_ar, display_order)
+            in _SEED_QUESTIONS
+        ],
     )
 
     # ------------------------------------------------------------------
