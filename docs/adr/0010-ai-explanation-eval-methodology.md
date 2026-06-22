@@ -67,6 +67,10 @@ All emitted as numbers when the harness runs; Layer-A metrics are exact, Layer-B
 
 `gate_pass_rate` is explicitly **not** a safety number: a value of 0.6 means 40% of requests fall back to deterministic text (a worse experience) and tells us the model/prompt needs work — it does **not** mean 40% of users saw something unsafe, because nothing unsafe ever passes the gate. And because `references_control_rate` measures the title-OR-code rule (ADR-0009 §3 check 2), a low value means *the model failed to ground its prose to the control*, **not** that it merely omitted a developer code.
 
+`must_expectations_rate` is, likewise, **not** a gate or safety metric. It is a deterministic **content-fidelity diagnostic**: per case, does the raw output contain every `must_contain` substring and none of the `must_not_contain` ones (§4). It is auto-scored (Layer-A trust), but it answers *"did the output match the golden set's hand-written expectations for this gap?"*, not *"is the user safe?"* (the gate) — a low value flags a prompt/grounding problem to investigate, never a release blocker. The harness output labels it as such so it is not misread as a safety number.
+
+**Single real runs are point estimates.** The model is non-deterministic; even at temperature 0 a run is **one sample**. The first `gate_pass_rate` / `must_expectations_rate` against Gemini are therefore reported as **point estimates, not a stable baseline** — surfaced where the numbers are printed and in the run artifact — and `quality_score` (Layer B) is pinned to the specific run artifact it was rated against (a `quality_score_run` provenance pointer), so a later re-run cannot silently invalidate a rating.
+
 ### 4. The golden set: reuse the synthetic companies as the input corpus
 
 The eval cases reuse the **existing synthetic companies' findings** (the same fixtures behind the deterministic engine and the product success metric of "≥ 90% of real gaps on 10 synthetic companies") as the input corpus. No new fictional data to maintain. Each case is:

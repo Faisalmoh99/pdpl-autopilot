@@ -162,6 +162,108 @@ async def test_report_contains_headline_and_breakdown() -> None:
 
     assert "gate_pass_rate" in report
     assert "no_compliance_assertion_rate" in report
+    assert "must_expectations_rate" in report
     assert "good" in report and "asserting_compliance" in report
     # The honest caveats must be present so the numbers cannot be misread.
     assert "not a safety number" in report
+    assert "CONTENT-FIDELITY" in report
+
+
+# ---------------------------------------------------------------------
+# must_expectations_rate + per-case records (C3a, ADR-0010 §3).
+# ---------------------------------------------------------------------
+def _case_with_expectations(case_id, text_control, *, must_contain, must_not_contain):
+    return GoldenCase(
+        id=case_id,
+        gap=GapContext(
+            control_code="PDPL-ART12-PRIVACY-NOTICE",
+            control_title_ar="إفصاح إشعار الخصوصية لأصحاب البيانات",
+            control_description_ar=text_control,
+            status="non_compliant",
+            rationale="privacy notice: none of 4 question(s) satisfied",
+            severity_weight=7.0,
+        ),
+        must_contain=must_contain,
+        must_not_contain=must_not_contain,
+    )
+
+
+async def test_must_expectations_rate_is_exact_and_per_case() -> None:
+    """One case's expectations are met by the fixed output, the other's are not,
+    so the content-fidelity diagnostic is exactly 0.5 — and the per-case records
+    expose WHICH substrings missed."""
+    cases = [
+        _case_with_expectations(
+            "hit", "x", must_contain=["إشعار", "الخصوصية"], must_not_contain=["أنت ملتزم"]
+        ),
+        _case_with_expectations(
+            "miss", "x", must_contain=["كلمة-غير-موجودة"], must_not_contain=[]
+        ),
+    ]
+    metrics = await run(StubExplainer.good(_GOOD_PRIVACY_NOTICE_AR), cases)
+
+    assert metrics.must_expectations_rate == 0.5
+    by_id = {r.id: r for r in metrics.case_results}
+    assert by_id["hit"].must_expectations_passed is True
+    assert by_id["hit"].candidate == _GOOD_PRIVACY_NOTICE_AR
+    assert by_id["miss"].must_expectations_passed is False
+    assert by_id["miss"].must_contain_missing == ("كلمة-غير-موجودة",)
+
+
+async def test_must_not_contain_violation_fails_expectations() -> None:
+    """The good text contains «الخصوصية»; forbidding it must fail the case."""
+    cases = [
+        _case_with_expectations(
+            "x", "x", must_contain=[], must_not_contain=["الخصوصية"]
+        )
+    ]
+    metrics = await run(StubExplainer.good(_GOOD_PRIVACY_NOTICE_AR), cases)
+    assert metrics.must_expectations_rate == 0.0
+    assert metrics.case_results[0].must_not_contain_present == ("الخصوصية",)
+
+
+class _RaisingExplainer:
+    async def explain(self, ctx):
+        raise RuntimeError("simulated model failure")
+
+
+async def test_explainer_failure_is_recorded_not_raised() -> None:
+    """A real-model failure on a case is caught and recorded as a failing
+    CaseResult, so a costed run never aborts midway."""
+    cases = [
+        _case_with_expectations("err", "x", must_contain=["إشعار"], must_not_contain=[])
+    ]
+    metrics = await run(_RaisingExplainer(), cases)
+
+    assert metrics.gate_pass_rate == 0.0
+    assert metrics.must_expectations_rate == 0.0
+    r = metrics.case_results[0]
+    assert r.candidate is None
+    assert r.gate_passed is False
+    assert "simulated model failure" in r.error
+
+
+def test_mean_quality_score_aggregates_the_human_ratings() -> None:
+    """The Layer-B aggregate over the golden set, now that C3 has rated every
+    case against a real run artifact (ADR-0010 §3)."""
+    cases = load_golden_set()
+    mean = harness.mean_quality_score(cases)
+    assert mean is not None
+    expected = sum(c.quality_score for c in cases) / len(cases)
+    assert mean == expected
+
+
+def test_mean_quality_score_is_none_when_no_case_is_rated() -> None:
+    """The function still returns None for an unrated set — the invariant the
+    stub relied on, kept as a unit of the aggregate itself."""
+    from pdpl.ai.explainer import GapContext
+    unrated = [
+        GoldenCase(
+            id="x",
+            gap=GapContext(
+                control_code="C", control_title_ar="ع", control_description_ar="ع",
+                status="non_compliant", rationale="r", severity_weight=1.0,
+            ),
+        )
+    ]
+    assert harness.mean_quality_score(unrated) is None

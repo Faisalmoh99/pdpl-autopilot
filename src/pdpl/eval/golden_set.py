@@ -11,7 +11,11 @@ Each case carries TWO distinct parts, kept apart on purpose (ADR-0010 §2/§4):
   - `input`  — a real `GapContext` (the control facts + the deterministic
     status/rationale). Its `rationale` is provably faithful engine output: the
     `source_answers` regenerate it via the real decision engine, asserted by
-    `tests/test_eval_golden_set.py` (drift protection).
+    `tests/test_eval_golden_set.py` (drift protection). Its
+    `unsatisfied_questions_ar` is faithful the same way — generated from the
+    engine's structured `unsatisfied_codes` joined through
+    `pdpl.catalog.prompts_ar_for`, the exact path the C4 runtime feeds the
+    model, and rebuilt + literal-equality-checked by the same test.
   - `expect` / `quality_*` — the human layer. `must_contain`/`must_not_contain`
     are Layer-A per-case assertions and `quality_score` is the Layer-B human
     rating; BOTH are scored in C3 against the real model, not against the stub
@@ -50,6 +54,10 @@ class GoldenCase:
     source_answers: dict[str, str] = field(default_factory=dict)
     quality_criteria: str = ""
     quality_score: float | None = None
+    # Provenance: the run id of the artifact this score was rated against. A
+    # rating without it is orphaned — a re-run would silently invalidate it
+    # (ADR-0010 §3, C3). Null until the case is rated.
+    quality_score_run: str | None = None
 
 
 def load_golden_set(path: Path = _DEFAULT_PATH) -> list[GoldenCase]:
@@ -65,6 +73,7 @@ def load_golden_set(path: Path = _DEFAULT_PATH) -> list[GoldenCase]:
             status=i["status"],
             rationale=i["rationale"],
             severity_weight=float(i["severity_weight"]),
+            unsatisfied_questions_ar=tuple(i.get("unsatisfied_questions_ar") or ()),
         )
         expect = entry.get("expect") or {}
         cases.append(
@@ -76,6 +85,7 @@ def load_golden_set(path: Path = _DEFAULT_PATH) -> list[GoldenCase]:
                 source_answers=dict(entry.get("source_answers") or {}),
                 quality_criteria=entry.get("quality_criteria") or "",
                 quality_score=entry.get("quality_score"),
+                quality_score_run=entry.get("quality_score_run"),
             )
         )
     return cases

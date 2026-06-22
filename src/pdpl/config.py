@@ -68,6 +68,37 @@ class Settings(BaseSettings):
         5.0, alias="OUTBOX_POLL_INTERVAL_SECONDS"
     )
 
+    # Gemini explainer (ADR-0009 §5, C3a). Optional at import — the API and the
+    # tests never call the real model — so a missing key does NOT stop the
+    # process. GeminiExplainer fails fast at CONSTRUCTION if the key/model are
+    # absent, so the manual eval run cannot start misconfigured. The key is a
+    # SecretStr and is never logged (at most a short fingerprint). Defaults
+    # match ADR-0009 §5: flash-tier model, 30s per-attempt wall-clock deadline,
+    # 3 attempts, full-jitter backoff 0.5s..8s, temperature 0 for the eval's
+    # reproducibility.
+    gemini_api_key: SecretStr | None = Field(None, alias="GEMINI_API_KEY")
+    gemini_model: str = Field("gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_timeout_seconds: float = Field(30.0, alias="GEMINI_TIMEOUT_SECONDS")
+    gemini_max_attempts: int = Field(3, alias="GEMINI_MAX_ATTEMPTS")
+    gemini_backoff_base_seconds: float = Field(
+        0.5, alias="GEMINI_BACKOFF_BASE_SECONDS"
+    )
+    gemini_backoff_cap_seconds: float = Field(
+        8.0, alias="GEMINI_BACKOFF_CAP_SECONDS"
+    )
+    gemini_temperature: float = Field(0.0, alias="GEMINI_TEMPERATURE")
+    # 1024 is a ceiling with headroom — the prompt's "2-4 sentences" and the
+    # 600-char gate bound govern the ACTUAL length. It also leaves room for the
+    # answer even if thinking is not fully disabled (the fallback-by-construction
+    # for thinking_budget=0, see GeminiExplainer).
+    gemini_max_output_tokens: int = Field(1024, alias="GEMINI_MAX_OUTPUT_TOKENS")
+    # gemini-2.5-flash runs THINKING by default, and thinking tokens count
+    # toward maxOutputTokens — at 512 they ate the budget and truncated the
+    # answer mid-word. 0 disables thinking on flash: for this short, already-
+    # grounded, deterministic task thinking adds nothing but cost, latency, and
+    # non-determinism. (-1 = dynamic/auto if ever needed.)
+    gemini_thinking_budget: int = Field(0, alias="GEMINI_THINKING_BUDGET")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

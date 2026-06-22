@@ -24,6 +24,28 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
+class ExplainerError(Exception):
+    """Base error raised by a real Explainer when it cannot produce output.
+
+    Mirrors the Notifier taxonomy (ADR-0008 / `pdpl.notifications.port`):
+    `TransientExplainerError` -> retry with backoff (bounded by max_attempts);
+    `PermanentExplainerError` -> do not retry. A failure the Explainer cannot
+    classify is raised as this base type and treated as transient (bounded).
+    On exhausted retries or a permanent failure, the C4 orchestration falls
+    back to the deterministic `rationale` — a failed call is never a failed
+    request (ADR-0009 §5).
+    """
+
+
+class TransientExplainerError(ExplainerError):
+    """A retry-worthy failure: timeout, connection error, HTTP 5xx or 429."""
+
+
+class PermanentExplainerError(ExplainerError):
+    """A non-retryable failure: HTTP 4xx (other than 429), or a malformed
+    response the Explainer cannot parse."""
+
+
 @dataclass(frozen=True)
 class GapContext:
     """The non-personal facts of one gap, handed to an `Explainer` (ADR-0009 §2).
@@ -40,6 +62,15 @@ class GapContext:
     status: str  # the deterministic verdict (non_compliant / partial / ...)
     rationale: str  # deterministic "what made the status what it is" (ADR-0006)
     severity_weight: float  # the control's weight (ADR-0007)
+    # The READABLE Arabic text of the unsatisfied/unanswered questions behind
+    # this gap (C3a). The `rationale` only carries cryptic question CODES (e.g.
+    # "gap(s): Q-ART12-NOTICE-RECIPIENTS"); without the text the model would
+    # have to decode them and could explain the wrong gap. The C4 runtime fills
+    # this from the engine's structured `unsatisfied_codes` via
+    # `pdpl.catalog.prompts_ar_for`; it is empty for controls with no rule (the
+    # model then binds to the control TITLE alone). Still tenant-agnostic — this
+    # is static control metadata, never a tenant answer or PII.
+    unsatisfied_questions_ar: tuple[str, ...] = ()
     lang: str = "ar"  # output language; MVP is Arabic-only
 
 

@@ -14,6 +14,15 @@
 # ART5, cross-border ART29) whose behavioural value (does the model bind to the
 # control TITLE when the rationale is thin?) is exercised in C3, not the stub.
 #
+# The input's `unsatisfied_questions_ar` is also PROVABLY FAITHFUL, not
+# hand-typed: it is the readable Arabic text of the gap's unsatisfied/unanswered
+# questions, generated from the engine's structured `unsatisfied_codes` joined
+# through `pdpl.catalog.prompts_ar_for` — the exact path the C4 runtime uses to
+# ground the model. tests/test_eval_golden_set.py rebuilds it and asserts
+# literal equality, so it cannot drift from what production will send. The three
+# controls with no engine rule (security / lawful-basis / cross-border) have no
+# questions, so the field is [] and the model binds to the control TITLE alone.
+#
 # Two layers kept apart (ADR-0010 §2):
 #   input   -> the GapContext (machine-generated, faithful).
 #   expect / quality_*  -> THE HUMAN LAYER. must_contain / must_not_contain are
@@ -39,6 +48,11 @@ cases:
       status: non_compliant
       rationale: "privacy notice: none of 4 question(s) satisfied"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تنشر إشعار خصوصية لأصحاب البيانات قبل جمع بياناتهم الشخصية؟"
+        - "هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟"
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "no"
       Q-ART12-NOTICE-PURPOSES: "no"
@@ -48,7 +62,8 @@ cases:
       must_contain: ["الخصوصية", "أغراض", "حقوق"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "عربي واضح غير تقني؛ خطوة علاجية واحدة: نشر إشعار خصوصية يغطّي الأغراض والمستلمين ومدد الاحتفاظ والحقوق؛ بلا وعود مطلقة أو ضمان امتثال."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: privacy-notice-partial
     input:
@@ -58,6 +73,9 @@ cases:
       status: partial
       rationale: "privacy notice: 2 of 4 question(s) satisfied; gap(s): Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "yes"
       Q-ART12-NOTICE-PURPOSES: "yes"
@@ -67,7 +85,8 @@ cases:
       must_contain: ["الخصوصية", "المستلمة", "حقوق"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: إضافة الجهات المستلمة وحقوق صاحب البيانات للإشعار؛ لا يدّعي نقص الأغراض (مُحقَّقة)؛ بلا مبالغة."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: privacy-notice-not_assessed
     input:
@@ -77,13 +96,18 @@ cases:
       status: not_assessed
       rationale: "privacy notice: not assessed — unanswered question(s): Q-ART12-NOTICE-PURPOSES, Q-ART12-NOTICE-RECIPIENTS, Q-ART12-NOTICE-RIGHTS"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل يوضح إشعار الخصوصية أغراض معالجة البيانات الشخصية؟"
+        - "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟"
+        - "هل يبيّن إشعار الخصوصية حقوق صاحب البيانات وكيفية ممارستها؟"
     source_answers:
       Q-ART12-NOTICE-EXISTS: "yes"
     expect:
       must_contain: ["الخصوصية", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
     quality_criteria: "يوضّح بأمانة أن البند لم يُقيَّم آلياً لعدم اكتمال الإجابات ويحتاج مراجعة يدوية؛ بلا اختلاق ثغرة أو حكم."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   # --- Right of access (PDPL-ART4-DSR-ACCESS, severity 7.0) — 3 statuses ---
   - id: dsr-access-non_compliant
@@ -94,6 +118,9 @@ cases:
       status: non_compliant
       rationale: "right of access: none of 2 question(s) satisfied"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل لديك إجراء موثّق للتعامل مع طلبات وصول أصحاب البيانات إلى بياناتهم؟"
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "no"
       Q-ART4-ACCESS-TIMEFRAME: "no"
@@ -101,7 +128,8 @@ cases:
       must_contain: ["الوصول", "آلية", "الإطار الزمني"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: إنشاء آلية لاستقبال طلبات الوصول وتحديد مهلة للرد؛ بلا ضمان."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: dsr-access-partial
     input:
@@ -111,6 +139,8 @@ cases:
       status: partial
       rationale: "right of access: 1 of 2 question(s) satisfied; gap(s): Q-ART4-ACCESS-TIMEFRAME"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "yes"
       Q-ART4-ACCESS-TIMEFRAME: "no"
@@ -118,7 +148,8 @@ cases:
       must_contain: ["الوصول", "الإطار الزمني", "الرد"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: تحديد إطار زمني نظامي للرد؛ لا يدّعي غياب الآلية (موجودة)."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: dsr-access-not_assessed
     input:
@@ -128,13 +159,16 @@ cases:
       status: not_assessed
       rationale: "right of access: not assessed — unanswered question(s): Q-ART4-ACCESS-TIMEFRAME"
       severity_weight: 7.0
+      unsatisfied_questions_ar:
+        - "هل تستجيب لطلبات الوصول خلال مدة زمنية محددة؟"
     source_answers:
       Q-ART4-ACCESS-PROCESS: "yes"
     expect:
       must_contain: ["الوصول", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "تسرب"]
     quality_criteria: "يوضّح بأمانة أن جانب مهلة الرد لم يُقيَّم لعدم الإجابة؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
-    quality_score: null
+    quality_score: 3
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   # --- Breach notification 72h (PDPL-ART20, severity 10.0) — 3 statuses ---
   - id: breach-72h-non_compliant
@@ -145,6 +179,9 @@ cases:
       status: non_compliant
       rationale: "breach notification (72h): none of 2 question(s) satisfied"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل لديك إجراء موثّق للاستجابة لتسرب البيانات الشخصية؟"
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "no"
       Q-ART20-BREACH-72H: "no"
@@ -152,7 +189,8 @@ cases:
       must_contain: ["تسرب", "الإبلاغ", "72"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
     quality_criteria: "خطوة واحدة: إعداد مسودة إبلاغ جاهزة وآلية إخطار خلال 72 ساعة؛ بلا مبالغة."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: breach-72h-partial
     input:
@@ -162,6 +200,8 @@ cases:
       status: partial
       rationale: "breach notification (72h): 1 of 2 question(s) satisfied; gap(s): Q-ART20-BREACH-72H"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "yes"
       Q-ART20-BREACH-72H: "no"
@@ -169,7 +209,8 @@ cases:
       must_contain: ["تسرب", "72", "ساعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
     quality_criteria: "خطوة واحدة: ضبط الإخطار ليلتزم بمهلة 72 ساعة؛ لا يدّعي غياب الإجراء."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: breach-72h-not_assessed
     input:
@@ -179,13 +220,16 @@ cases:
       status: not_assessed
       rationale: "breach notification (72h): not assessed — unanswered question(s): Q-ART20-BREACH-72H"
       severity_weight: 10.0
+      unsatisfied_questions_ar:
+        - "هل يلتزم الإجراء بإبلاغ الجهة المختصة خلال 72 ساعة من العلم بالتسرب؟"
     source_answers:
       Q-ART20-BREACH-PROCEDURE: "yes"
     expect:
       must_contain: ["تسرب", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "حق الوصول"]
     quality_criteria: "أمانة: جانب الـ72 ساعة لم يُقيَّم؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   # --- Records of processing (PDPL-ART31-ROPA, severity 5.0) — single
   # question, so no `partial`: only non_compliant and not_assessed. ---
@@ -197,13 +241,16 @@ cases:
       status: non_compliant
       rationale: "records of processing: none of 1 question(s) satisfied"
       severity_weight: 5.0
+      unsatisfied_questions_ar:
+        - "هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟"
     source_answers:
       Q-ART31-ROPA-MAINTAINED: "no"
     expect:
       must_contain: ["سجل", "أنشطة المعالجة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "إشعار الخصوصية"]
     quality_criteria: "خطوة واحدة: إنشاء سجل أنشطة معالجة يوثّق الأغراض والفئات والمستلمين ومدد الاحتفاظ؛ بلا مبالغة."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: ropa-not_assessed
     input:
@@ -213,12 +260,15 @@ cases:
       status: not_assessed
       rationale: "records of processing: not assessed — unanswered question(s): Q-ART31-ROPA-MAINTAINED"
       severity_weight: 5.0
+      unsatisfied_questions_ar:
+        - "هل تحتفظ بسجل لعمليات معالجة البيانات الشخصية؟"
     source_answers: {}
     expect:
       must_contain: ["سجل", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
     quality_criteria: "أمانة: لم يُقيَّم لعدم تقديم ما يكفي؛ خطوة واحدة: تجهيز السجل الداخلي للمراجعة اليدوية."
-    quality_score: null
+    quality_score: 4
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   # --- High-severity controls with no engine rule yet -> not_assessed with the
   # generic rationale. These test that the model binds to the control TITLE when
@@ -231,12 +281,14 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 9.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["التدابير الفنية", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تشفير", "اختراق"]
     quality_criteria: "يربط بعنوان الضابط فقط، يوضّح عدم التقييم والحاجة لمراجعة يدوية؛ بلا اختلاق أي ثغرة أمنية محدّدة."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: lawful-basis-not_assessed
     input:
@@ -246,12 +298,14 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 9.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["الأساس النظامي", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "بدون مسوّغ", "تسرب"]
     quality_criteria: "يربط بالعنوان، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة مثل (تجمع بيانات بدون أساس)؛ حياد تام."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
 
   - id: cross-border-not_assessed
     input:
@@ -261,9 +315,11 @@ cases:
       status: not_assessed
       rationale: "no deterministic rule registered for this control yet"
       severity_weight: 8.0
+      unsatisfied_questions_ar: []
     source_answers: {}
     expect:
       must_contain: ["نقل البيانات", "خارج المملكة", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تنقل بدون", "تسرب"]
     quality_criteria: "يربط بعنوان النقل خارج المملكة، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة نقل."
-    quality_score: null
+    quality_score: 5
+    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z

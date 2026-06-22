@@ -124,18 +124,25 @@ def test_arabic_ratio_tolerates_an_embedded_english_term() -> None:
 
 
 # --------------------------------------------------------------------------
-# Check 4 — length bounds (20..600 on trimmed text).
+# Check 4 — length bounds (20..800 on trimmed text, recalibrated in C3a).
 # --------------------------------------------------------------------------
 def test_length_fails_when_too_short() -> None:
     assert _verify("قصير").within_length_bounds.passed is False
 
 
 def test_length_fails_when_too_long() -> None:
-    assert _verify("ا" * 601).within_length_bounds.passed is False
+    assert _verify("ا" * 801).within_length_bounds.passed is False
 
 
 def test_length_passes_within_bounds() -> None:
     assert _verify(_GOOD_AR).within_length_bounds.passed is True
+
+
+def test_length_admits_natural_arabic_explanation_length() -> None:
+    """C3a evidence: real PDPL Arabic gap explanations run ~600-750 chars with
+    no padding. The recalibrated 800 bound admits that genuine length (the old
+    600 guess rejected it)."""
+    assert _verify("ا" * 720).within_length_bounds.passed is True
 
 
 # --------------------------------------------------------------------------
