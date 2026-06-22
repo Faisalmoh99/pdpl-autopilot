@@ -69,7 +69,8 @@ class GeminiExplainer:
         backoff_base_seconds: float = 0.5,
         backoff_cap_seconds: float = 8.0,
         temperature: float = 0.0,
-        max_output_tokens: int = 512,
+        max_output_tokens: int = 1024,
+        thinking_budget: int = 0,
         base_url: str = _DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -91,6 +92,7 @@ class GeminiExplainer:
         self._backoff_cap = backoff_cap_seconds
         self._temperature = temperature
         self._max_output_tokens = max_output_tokens
+        self._thinking_budget = thinking_budget
         self._url = f"{base_url.rstrip('/')}/v1beta/models/{model}:generateContent"
         # The per-attempt deadline below (asyncio.timeout) is authoritative; the
         # client timeout is a secondary guard so a stuck socket cannot hang past
@@ -138,6 +140,9 @@ class GeminiExplainer:
             "generationConfig": {
                 "temperature": self._temperature,
                 "maxOutputTokens": self._max_output_tokens,
+                # Disable (or bound) thinking so it does not consume the output
+                # budget and truncate the answer (REST v1beta field).
+                "thinkingConfig": {"thinkingBudget": self._thinking_budget},
             },
         }
         headers = {
@@ -197,26 +202,41 @@ class GeminiExplainer:
 
     @staticmethod
     def _parse(response: httpx.Response) -> tuple[str, int | None]:
-        """Extract the candidate text + approximate token usage. A malformed or
-        blocked response (no candidate text) is PERMANENT — retrying will not
-        help, and an empty string must never reach the gate as a candidate."""
+        """Extract the candidate text + approximate token usage.
+
+        Any completion that did not finish cleanly is PERMANENT and is NEVER
+        returned as a partial string:
+          - no candidates, or non-JSON body;
+          - finishReason != STOP (MAX_TOKENS truncation, SAFETY / RECITATION
+            blocks, ...) — `finishReason` is the correct truncation detector,
+            NOT the length-bounds content check;
+          - empty/whitespace text.
+        Retrying cannot fix a truncation or a block, so this funnels straight to
+        the orchestrator's deterministic fallback at runtime and is recorded in
+        the eval's per-case `error` field — a truncated/blocked output can never
+        silently reach a user or silently pass the gate.
+        """
         try:
             data: dict[str, Any] = response.json()
         except ValueError as exc:
             raise PermanentExplainerError("gemini response was not JSON") from exc
 
         candidates = data.get("candidates") or []
-        parts = (
-            candidates[0].get("content", {}).get("parts", [])
-            if candidates
-            else []
-        )
+        if not candidates:
+            raise PermanentExplainerError("gemini returned no candidates")
+
+        candidate = candidates[0]
+        finish_reason = candidate.get("finishReason")
+        if finish_reason != "STOP":
+            raise PermanentExplainerError(
+                f"gemini did not finish cleanly (finishReason={finish_reason}); "
+                "a truncated or blocked completion is never returned"
+            )
+
+        parts = candidate.get("content", {}).get("parts", [])
         text = "".join(p.get("text", "") for p in parts).strip()
         if not text:
-            reason = candidates[0].get("finishReason") if candidates else "no candidates"
-            raise PermanentExplainerError(
-                f"gemini returned no usable text (finishReason={reason})"
-            )
+            raise PermanentExplainerError("gemini returned empty text")
 
         usage = data.get("usageMetadata") or {}
         total_tokens = usage.get("totalTokenCount")
@@ -236,4 +256,5 @@ def gemini_explainer_from_settings(settings) -> GeminiExplainer:
         backoff_cap_seconds=settings.gemini_backoff_cap_seconds,
         temperature=settings.gemini_temperature,
         max_output_tokens=settings.gemini_max_output_tokens,
+        thinking_budget=settings.gemini_thinking_budget,
     )

@@ -87,7 +87,17 @@ class Settings(BaseSettings):
         8.0, alias="GEMINI_BACKOFF_CAP_SECONDS"
     )
     gemini_temperature: float = Field(0.0, alias="GEMINI_TEMPERATURE")
-    gemini_max_output_tokens: int = Field(512, alias="GEMINI_MAX_OUTPUT_TOKENS")
+    # 1024 is a ceiling with headroom — the prompt's "2-4 sentences" and the
+    # 600-char gate bound govern the ACTUAL length. It also leaves room for the
+    # answer even if thinking is not fully disabled (the fallback-by-construction
+    # for thinking_budget=0, see GeminiExplainer).
+    gemini_max_output_tokens: int = Field(1024, alias="GEMINI_MAX_OUTPUT_TOKENS")
+    # gemini-2.5-flash runs THINKING by default, and thinking tokens count
+    # toward maxOutputTokens — at 512 they ate the budget and truncated the
+    # answer mid-word. 0 disables thinking on flash: for this short, already-
+    # grounded, deterministic task thinking adds nothing but cost, latency, and
+    # non-determinism. (-1 = dynamic/auto if ever needed.)
+    gemini_thinking_budget: int = Field(0, alias="GEMINI_THINKING_BUDGET")
 
 
 @lru_cache(maxsize=1)

@@ -93,6 +93,8 @@ async def test_success_sends_correct_request_and_returns_text():
     assert body["systemInstruction"]["parts"][0]["text"]  # non-empty rules
     assert body["contents"][0]["role"] == "user"
     assert body["generationConfig"]["temperature"] == 0.0
+    # thinking is disabled so it cannot eat the output budget and truncate
+    assert body["generationConfig"]["thinkingConfig"]["thinkingBudget"] == 0
     # the unsatisfied question text is grounded into the prompt
     assert "هل تنشر إشعار خصوصية؟" in body["contents"][0]["parts"][0]["text"]
 
@@ -198,14 +200,35 @@ async def test_no_candidates_is_permanent():
 
 
 async def test_empty_text_is_permanent():
+    # finishReason STOP but whitespace-only text -> the empty-text branch.
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"candidates": [{"content": {"parts": [{"text": "  "}]}, "finishReason": "SAFETY"}]},
+            json={"candidates": [{"content": {"parts": [{"text": "  "}]}, "finishReason": "STOP"}]},
         )
 
     with pytest.raises(PermanentExplainerError):
         await _explainer(handler).explain(_ctx())
+
+
+@pytest.mark.parametrize("reason", ["MAX_TOKENS", "SAFETY", "RECITATION", None])
+async def test_non_stop_finish_reason_is_permanent_not_returned(reason):
+    """A truncated/blocked completion (finishReason != STOP) is a typed PERMANENT
+    error, even WITH partial text — never silently returned, never retried. This
+    is the structural fix: a truncation/block can never silently reach a user or
+    pass the gate again (the C3a invalid-run bug)."""
+    calls = {"n": 0}
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        cand = {"content": {"parts": [{"text": "نص عربي مقطوع في منتص"}]}}
+        if reason is not None:
+            cand["finishReason"] = reason
+        return httpx.Response(200, json={"candidates": [cand]})
+
+    with pytest.raises(PermanentExplainerError):
+        await _explainer(handler, max_attempts=3).explain(_ctx())
+    assert calls["n"] == 1  # permanent -> no retry
 
 
 async def test_non_json_body_is_permanent():
@@ -275,6 +298,7 @@ def test_from_settings_fails_fast_when_unset():
         gemini_backoff_cap_seconds=8.0,
         gemini_temperature=0.0,
         gemini_max_output_tokens=512,
+        gemini_thinking_budget=0,
     )
     with pytest.raises(ValueError):
         gemini_explainer_from_settings(settings)
@@ -290,5 +314,6 @@ def test_from_settings_builds_when_configured():
         gemini_backoff_cap_seconds=8.0,
         gemini_temperature=0.0,
         gemini_max_output_tokens=512,
+        gemini_thinking_budget=0,
     )
     assert isinstance(gemini_explainer_from_settings(settings), GeminiExplainer)
