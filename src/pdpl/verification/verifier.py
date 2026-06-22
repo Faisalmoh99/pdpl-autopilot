@@ -30,11 +30,17 @@ from dataclasses import dataclass
 from pdpl.verification.denylist import COMPLIANCE_ASSERTIONS
 from pdpl.verification.normalize import normalize
 
-# --- Tunable thresholds (C2's numbers will inform these) ---
+# --- Tunable thresholds (calibrated against real output, like 0.75 below) ---
 # Length bounds on the trimmed candidate: reject empty/trivial output and
 # runaway generation (ADR-0009 §3 check 4).
 _MIN_LENGTH = 20
-_MAX_LENGTH = 600
+# Calibrated up from an unvalidated 600 (a C1 guess made before any real output
+# existed). The first real Gemini run (C3a) showed natural PDPL Arabic gap
+# explanations — a 2-4 sentence reason plus one remediation step — run ~600-750
+# chars with no padding; 800 admits that genuine length while still catching
+# runaway generation. (The verbatim control-text quoting that pushed one outlier
+# to ~900 is a prompt behaviour deferred to a v2 prompt, not a length problem.)
+_MAX_LENGTH = 800
 # Arabic-character ratio (ADR-0009 §3 check 3). 0.75 enforces genuinely Arabic
 # prose while tolerating an embedded English term (e.g. "PDPL"); the
 # control_code is stripped before the ratio so a long Latin code cannot drag

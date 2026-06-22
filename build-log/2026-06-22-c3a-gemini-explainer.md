@@ -70,10 +70,38 @@ verifier/explanations); catalogue added to contract 5 (it is production, not too
   question wording requires bumping `prompt_version`**. ADR-0010 §3 documents
   `must_expectations_rate` as a content-fidelity diagnostic and single real runs as point estimates.
 
+## First real run — what it taught us (the honest pieces)
+
+The first manual Gemini run was **invalid** (all 14 outputs truncated mid-word): `gemini-2.5-flash`
+runs *thinking* by default and thinking tokens count toward `maxOutputTokens`, so at 512 they ate
+the budget. Fixed with `thinkingBudget=0` + a 1024 ceiling + a `finishReason != STOP` guard that
+turns any truncated/blocked completion into a typed permanent error (never a silent partial string).
+
+The second run was clean (14 complete, zero errors, all `STOP`) and gave the first honest data:
+
+- **Length bound recalibrated 600 → 800 (evidence-based, not scope creep).** 7 of 8 overflows were
+  605–713 chars of complete, useful Arabic with no padding — the 600 bound was an unvalidated C1
+  guess made before any real output existed. Natural PDPL Arabic gap explanations (2–4 sentence
+  reason + one remediation step) run ~600–750. Same spirit as the 0.75 Arabic-ratio calibration.
+- **`gap-ar-v1` baseline caveat — DEFERRED to a v2 prompt, deliberately not tuned this session.**
+  The prompt makes the model **quote the control title/description verbatim** in the remediation
+  tail (e.g. «…وذلك التزاماً بمتطلبات إفصاح إشعار الخصوصية…»; `ropa-non_compliant` copies the full
+  description in parentheses → a ~907-char outlier). Two honest consequences for the v1 baseline:
+  (1) it inflates length, and (2) it **partly drives `references_control_rate = 1.00`** — the
+  control token is present because it was *copied*, not necessarily because the gap was understood.
+  Tuning the prompt now would corrupt the v1 baseline before `quality_score` is rated against it, so
+  a new `prompt_version` is a discuss-first decision needing a **comparative run** (v1 vs v2). This
+  note is the baseline-v1 record; the bound widening above is the only behavioural change.
+
+## Lessons (Faisal)
+
+_Placeholder — filled after I rate `quality_score` against the bound-corrected v1 run._
+
 ## Next
 
-- **Manual step (me):** run `python -m pdpl.eval.manual_gemini_run` with my key → first real
-  Layer-A numbers + the review artifact → rate `quality_score` (Layer B).
+- **Manual step (me):** re-run `python -m pdpl.eval.manual_gemini_run` (temp 0, thinking off, bound
+  800) → the v1 Layer-A numbers + the review artifact → rate `quality_score` (Layer B) against THIS
+  bound-corrected, prompt-unchanged v1 output.
 - **C3b:** the `ai_explanations` content-hash cache table + repository (INSERT+SELECT grants only,
   verified text only).
 - **C4:** wire the on-demand explanation into the findings/HTTP layer (the orchestration that calls
