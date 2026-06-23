@@ -43,13 +43,20 @@ def _ctx(**over) -> GapContext:
     return GapContext(**base)
 
 
-def _ok_payload(text: str = "هذا شرح عربي واضح للفجوة وخطوة علاجية واحدة.") -> dict:
-    return {
+def _ok_payload(
+    text: str = "هذا شرح عربي واضح للفجوة وخطوة علاجية واحدة.",
+    *,
+    model_version: str | None = "gemini-2.5-flash",
+) -> dict:
+    payload: dict = {
         "candidates": [
             {"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}
         ],
         "usageMetadata": {"totalTokenCount": 42},
     }
+    if model_version is not None:
+        payload["modelVersion"] = model_version
+    return payload
 
 
 def _explainer(handler, *, key: str = _KEY, max_attempts: int = 3, timeout: float = 30.0):
@@ -84,7 +91,7 @@ async def test_success_sends_correct_request_and_returns_text():
         return httpx.Response(200, json=_ok_payload("شرح."))
 
     out = await _explainer(handler).explain(_ctx())
-    assert out == "شرح."
+    assert out.text == "شرح."
 
     req = captured["req"]
     assert req.url.path.endswith("/v1beta/models/gemini-2.5-flash:generateContent")
@@ -185,7 +192,7 @@ async def test_retries_then_succeeds():
         return next(seq)
 
     out = await _explainer(handler, max_attempts=3).explain(_ctx())
-    assert out == "نجح."
+    assert out.text == "نجح."
 
 
 # --------------------------------------------------------------- parsing
@@ -317,3 +324,58 @@ def test_from_settings_builds_when_configured():
         gemini_thinking_budget=0,
     )
     assert isinstance(gemini_explainer_from_settings(settings), GeminiExplainer)
+
+
+# ------------------------------------------------ modelVersion provenance (C4a)
+
+
+async def test_model_version_is_captured_on_the_output():
+    """The concrete `modelVersion` the API answered with is surfaced on
+    ExplainerOutput for provenance (ADR-0011 §6)."""
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_payload(model_version="gemini-2.5-flash-002"))
+
+    out = await _explainer(handler).explain(_ctx())
+    assert out.model_version == "gemini-2.5-flash-002"
+
+
+async def test_absent_model_version_is_none_not_fabricated():
+    """An older response without `modelVersion` -> provenance is None, never
+    invented."""
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_payload(model_version=None))
+
+    out = await _explainer(handler).explain(_ctx())
+    assert out.model_version is None
+
+
+async def test_model_version_mismatch_is_warned_but_not_blocked():
+    """DETECT, not prevent (ADR-0011 §6): a returned modelVersion differing from
+    the requested id still returns the output, and logs a mismatch warning so a
+    human can notice and bump prompt_version."""
+    def handler(_request: httpx.Request) -> httpx.Response:
+        # requested default is gemini-2.5-flash; the provider answered with a
+        # different concrete snapshot (a silently re-pointed alias).
+        return httpx.Response(200, json=_ok_payload("شرح.", model_version="gemini-2.5-flash-NEXT"))
+
+    with capture_logs() as logs:
+        out = await _explainer(handler).explain(_ctx())
+
+    assert out.text == "شرح."  # not blocked
+    assert out.model_version == "gemini-2.5-flash-NEXT"
+    mismatch = [e for e in logs if e.get("event") == "ai.gemini.model_version_mismatch"]
+    assert len(mismatch) == 1
+    assert mismatch[0]["requested_model"] == "gemini-2.5-flash"
+    assert mismatch[0]["returned_model_version"] == "gemini-2.5-flash-NEXT"
+
+
+async def test_matching_model_version_does_not_warn():
+    """When the returned modelVersion matches the requested id, no mismatch
+    warning is emitted (the alias has not drifted)."""
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_payload("شرح.", model_version="gemini-2.5-flash"))
+
+    with capture_logs() as logs:
+        await _explainer(handler).explain(_ctx())
+
+    assert not [e for e in logs if e.get("event") == "ai.gemini.model_version_mismatch"]

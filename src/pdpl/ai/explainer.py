@@ -74,6 +74,26 @@ class GapContext:
     lang: str = "ar"  # output language; MVP is Arabic-only
 
 
+@dataclass(frozen=True)
+class ExplainerOutput:
+    """What an `Explainer` produced, plus the provenance of what produced it
+    (ADR-0011 §6 — a refinement of the ADR-0009 §1 port, which returned a bare
+    `str`).
+
+    `model_version` is the concrete model the provider actually answered with
+    (e.g. Gemini's response `modelVersion`), which can differ from the requested
+    id when a floating alias is re-pointed. It must travel WITH the text it
+    produced — a `GeminiExplainer` instance may serve concurrent calls, so a
+    stored "last model version" attribute would race. It is `None` for a stub or
+    any explainer that does not report one. The orchestration surfaces it on
+    `ExplanationResult.model_version` for per-call provenance; it is NOT in the
+    cache key (it is unknown before the call).
+    """
+
+    text: str
+    model_version: str | None = None
+
+
 @runtime_checkable
 class Explainer(Protocol):
     """Turns a deterministic `GapContext` into a short, human Arabic
@@ -85,7 +105,7 @@ class Explainer(Protocol):
     the deterministic `rationale` on failure.
     """
 
-    async def explain(self, ctx: GapContext) -> str: ...
+    async def explain(self, ctx: GapContext) -> ExplainerOutput: ...
 
 
 class StubExplainer:
@@ -110,9 +130,10 @@ class StubExplainer:
         self.output = output
         self.calls: list[GapContext] = []
 
-    async def explain(self, ctx: GapContext) -> str:
+    async def explain(self, ctx: GapContext) -> ExplainerOutput:
         self.calls.append(ctx)
-        return self.output
+        # A stub reports no provenance — model_version is None by construction.
+        return ExplainerOutput(text=self.output)
 
     @classmethod
     def good(cls, text: str) -> StubExplainer:

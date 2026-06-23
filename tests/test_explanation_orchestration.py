@@ -1,65 +1,215 @@
-"""Unit tests for the gap-explanation orchestration (ADR-0009 §4).
+"""Integration tests for the runtime orchestration `explain_gap`
+(ADR-0011 §2) — against the same Supabase project as the C3b cache tests.
 
-Pure and offline — they drive `explain_gap` with a `StubExplainer`, no
-database / network / model. This file contains the KEYSTONE proof-of-safety
-test (ADR-0010 §5): a deliberately-unsafe stub that asserts compliance must be
-rejected by the gate, and the orchestration must fall back to the
-deterministic `rationale` — proving the safety line is wired and real, not
-assumed.
+`explain_gap` is now cache-aware, so it needs a real DB session (the cache is
+integral to the runtime path). Each test uses a UNIQUE GapContext (a nonce in
+the rationale) so cache rows never collide across runs.
+
+THE KEYSTONE (ADR-0010 §5) is surfaced here on BOTH paths the gate now guards:
+  - FRESH: a deliberately-unsafe explainer asserts compliance -> the gate
+    rejects -> fallback. The unsafe AI text never reaches the caller.
+  - RE-GATED HIT: a poisoned row injected directly into the cache (bypassing the
+    gate, as `put` does not verify) -> the read re-gates -> rejects ->
+    fallback, reason=cache_regate_failed. A poisoned cache row is never served.
+If either ever fails, the safety machinery is broken and the build is red.
 """
 
 from __future__ import annotations
 
-from pdpl.ai.explainer import GapContext, StubExplainer
-from pdpl.explanations import explain_gap
+import uuid
 
-# A real-shaped GapContext (tenant-agnostic — no PII). The rationale is the
-# deterministic engine's output, and is exactly what the fallback returns.
-_RATIONALE = "privacy notice: 2 of 4 question(s) satisfied; gap(s): purposes, rights"
-_CTX = GapContext(
-    control_code="PDPL-ART12-PRIVACY-NOTICE",
-    control_title_ar="الإشعار بالخصوصية",
-    control_description_ar="إشعار يوضّح للعميل أغراض معالجة بياناته وحقوقه.",
-    status="partial",
-    rationale=_RATIONALE,
-    severity_weight=3.0,
-    lang="ar",
+from pdpl.ai.explainer import (
+    ExplainerError,
+    ExplainerOutput,
+    GapContext,
+    StubExplainer,
+    TransientExplainerError,
 )
+from pdpl.ai.prompt import PROMPT_VERSION
+from pdpl.db.ai_explanations import compute_cache_key, put
+from pdpl.db.session import session_scope
+from pdpl.explanations import explain_gap
+from pdpl.explanations.fallback import deterministic_fallback
 
+_MODEL = "gemini-2.5-flash"
+
+# A known-good Arabic explanation that passes the gate (references the control,
+# Arabic, within bounds, no compliance assertion).
 _GOOD_AR = (
     "لا يتوفر لديك إشعار خصوصية يوضّح للعميل أغراض المعالجة وحقوقه. "
     "أضف الإشعار بالخصوصية إلى موقعك كخطوة أولى لمعالجة هذه الثغرة."
 )
 
+# A bald compliance assertion — the gate MUST reject it on either path.
+_UNSAFE = "أنت ملتزم بالنظام بشكل كامل ولا توجد أي ثغرات لديك."
 
-async def test_keystone_compliance_assertion_is_rejected_and_falls_back() -> None:
-    """KEYSTONE / proof-of-safety (ADR-0010 §5).
 
-    The deliberately-unsafe stub asserts compliance («أنت ملتزم …»). The gate
-    MUST reject it and the orchestration MUST return the deterministic
-    rationale — the unsafe AI text never reaches the caller. If this test ever
-    fails, the safety machinery is broken and the build is red.
-    """
+def _ctx() -> GapContext:
+    """A unique, real-shaped, tenant-agnostic GapContext (the nonce in the
+    rationale guarantees an uncached cache key per test)."""
+    nonce = uuid.uuid4().hex
+    return GapContext(
+        control_code="PDPL-ART12-PRIVACY-NOTICE",
+        control_title_ar="الإشعار بالخصوصية",
+        control_description_ar="إشعار يوضّح للعميل أغراض معالجة بياناته وحقوقه.",
+        status="partial",
+        rationale=f"privacy notice: 2 of 4 question(s) satisfied; gap(s): [{nonce}]",
+        severity_weight=3.0,
+        unsatisfied_questions_ar=(
+            "هل يحدد إشعار الخصوصية الجهات المستلمة للبيانات أو فئاتها؟",
+        ),
+        lang="ar",
+    )
+
+
+def _key_for(ctx: GapContext) -> str:
+    return compute_cache_key(
+        prompt_version=PROMPT_VERSION,
+        model=_MODEL,
+        control_code=ctx.control_code,
+        status=ctx.status,
+        rationale=ctx.rationale,
+        lang=ctx.lang,
+    )
+
+
+class _RaisingExplainer:
+    """An Explainer (structurally) that always raises — models the real Gemini
+    call failing (timeout / 5xx / truncation) after exhausted retries."""
+
+    def __init__(self) -> None:
+        self.calls: list[GapContext] = []
+
+    async def explain(self, ctx: GapContext) -> ExplainerOutput:
+        self.calls.append(ctx)
+        raise TransientExplainerError("simulated exhausted retries")
+
+
+class _VersionedExplainer:
+    """A good explainer that reports a concrete model_version — models the real
+    Gemini call surfacing its resolved modelVersion (ADR-0011 §6)."""
+
+    def __init__(self, *, text: str, model_version: str) -> None:
+        self._text = text
+        self._model_version = model_version
+        self.calls: list[GapContext] = []
+
+    async def explain(self, ctx: GapContext) -> ExplainerOutput:
+        self.calls.append(ctx)
+        return ExplainerOutput(text=self._text, model_version=self._model_version)
+
+
+# ---------------------------------------------------------------------
+# KEYSTONE — fresh path.
+# ---------------------------------------------------------------------
+async def test_keystone_fresh_compliance_assertion_is_rejected(app) -> None:
+    """KEYSTONE (fresh): an unsafe compliance assertion from the model is
+    rejected by the gate and replaced by the deterministic floor."""
+    ctx = _ctx()
     explainer = StubExplainer.asserting_compliance()
 
-    result = await explain_gap(_CTX, explainer)
+    async with session_scope() as session:
+        result = await explain_gap(session, ctx, explainer, model=_MODEL)
 
-    # The stub WAS called (we really exercised the produce->verify->fallback
-    # path, not a short-circuit)...
-    assert explainer.calls == [_CTX]
-    # ...and yet the caller got the safe deterministic rationale, NOT the
-    # unsafe compliance assertion.
-    assert result == _RATIONALE
-    assert result != explainer.output
-    assert "أنت ملتزم" not in result
+    assert explainer.calls == [ctx]  # we really ran produce -> verify -> fallback
+    assert result.source == "fallback"
+    assert result.reason == "gate_rejected"
+    assert result.text == deterministic_fallback(ctx)
+    assert "أنت ملتزم" not in result.text
 
 
-async def test_verified_explanation_is_returned_unchanged() -> None:
-    """The happy path: a good explanation passes the gate and is returned as
-    is — proving the gate is permissive to safe, grounded Arabic."""
+# ---------------------------------------------------------------------
+# KEYSTONE — re-gated hit path (the C4a re-gate-on-read proof).
+# ---------------------------------------------------------------------
+async def test_keystone_poisoned_cache_row_is_regated_and_rejected(app) -> None:
+    """KEYSTONE (re-gated hit): a poisoned row injected directly into the cache
+    is RE-GATED on read, rejected, and replaced by the fallback —
+    reason=cache_regate_failed. The poisoned text is never served, and the
+    explainer is never called (it was a hit)."""
+    ctx = _ctx()
+    key = _key_for(ctx)
+    # Inject the unsafe text directly — put does not verify (verified-only is the
+    # orchestrator's contract, not the cache's).
+    async with session_scope() as session:
+        await put(
+            session, key, text=_UNSAFE, lang="ar",
+            prompt_version=PROMPT_VERSION, model=_MODEL,
+        )
+
     explainer = StubExplainer.good(_GOOD_AR)
+    async with session_scope() as session:
+        result = await explain_gap(session, ctx, explainer, model=_MODEL)
 
-    result = await explain_gap(_CTX, explainer)
+    assert explainer.calls == []  # a hit — the model was not called
+    assert result.source == "fallback"
+    assert result.reason == "cache_regate_failed"
+    assert result.text == deterministic_fallback(ctx)
+    assert "أنت ملتزم" not in result.text
 
-    assert result == _GOOD_AR
-    assert explainer.calls == [_CTX]
+
+# ---------------------------------------------------------------------
+# Happy path + the cache miss -> put -> hit round trip.
+# ---------------------------------------------------------------------
+async def test_verified_output_is_returned_and_cached_then_hit(app) -> None:
+    """A miss: the model's good output passes the gate, is cached, and returned
+    as ai_verified. A second call for the SAME gap is a cache_hit served from
+    the row just written — the explainer is not called again."""
+    ctx = _ctx()
+
+    explainer = StubExplainer.good(_GOOD_AR)
+    async with session_scope() as session:
+        first = await explain_gap(session, ctx, explainer, model=_MODEL)
+
+    assert first.source == "ai_verified"
+    assert first.text == _GOOD_AR
+    assert first.reason is None
+    assert first.model_version is None  # populated in C4b (modelVersion capture)
+    assert explainer.calls == [ctx]
+
+    # Second call: a different explainer that must NOT be called (cache hit).
+    second_explainer = StubExplainer.good("نص مختلف يجب ألا يُستخدم لأن الكاش يخدم.")
+    async with session_scope() as session:
+        second = await explain_gap(session, ctx, second_explainer, model=_MODEL)
+
+    assert second.source == "cache_hit"
+    assert second.text == _GOOD_AR  # served the first verified text, not the new one
+    assert second_explainer.calls == []  # the model was not called on a hit
+
+
+# ---------------------------------------------------------------------
+# Explainer failure -> fallback (a failed call is never a failed request).
+# ---------------------------------------------------------------------
+async def test_explainer_error_falls_back(app) -> None:
+    """When the explainer raises (exhausted retries / truncation / block), the
+    orchestration falls back to the deterministic floor — never propagates the
+    error, never caches anything."""
+    ctx = _ctx()
+    explainer = _RaisingExplainer()
+
+    async with session_scope() as session:
+        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+
+    assert explainer.calls == [ctx]
+    assert result.source == "fallback"
+    assert result.reason == "explainer_error"
+    assert result.text == deterministic_fallback(ctx)
+
+
+async def test_model_version_is_propagated_to_the_result(app) -> None:
+    """ai_verified provenance: the concrete model_version the explainer reported
+    is surfaced on the ExplanationResult (ADR-0011 §6). It is NOT in the cache
+    key (a different gap/nonce, so this is a fresh miss)."""
+    ctx = _ctx()
+    explainer = _VersionedExplainer(text=_GOOD_AR, model_version="gemini-2.5-flash-002")
+
+    async with session_scope() as session:
+        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+
+    assert result.source == "ai_verified"
+    assert result.model_version == "gemini-2.5-flash-002"
+
+
+def test_explainer_error_is_an_explainer_error_subclass() -> None:
+    """Guard: the raising stub raises the real taxonomy the orchestrator catches
+    (so the except clause genuinely covers the real failure mode)."""
+    assert issubclass(TransientExplainerError, ExplainerError)
