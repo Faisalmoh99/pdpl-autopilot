@@ -28,10 +28,10 @@ from pdpl.explanations.fallback import (
 )
 from pdpl.eval.golden_set import load_golden_set
 from pdpl.verification import verify_explanation
-from pdpl.verification.denylist import COMPLIANCE_ASSERTIONS
-from pdpl.verification.normalize import normalize
 
-# Every user-visible template string the fallback can emit.
+# Every user-visible template string the fallback can emit. The three the C4a
+# decision turns on — _GAP_INTRO["non_compliant"], _GAP_INTRO["partial"],
+# _NOT_ASSESSED — are included via _GAP_INTRO.values() and _NOT_ASSESSED.
 _ALL_TEMPLATES = (
     *_GAP_INTRO.values(),
     _REQUIREMENTS_HEADER,
@@ -40,16 +40,23 @@ _ALL_TEMPLATES = (
 )
 
 
-def test_templates_are_denylist_clean_at_authoring_time() -> None:
-    """No template constant contains a denylisted compliance assertion. Checked
-    once here so a static string can never trip the safety-critical check."""
-    norm_phrases = [normalize(p) for p in COMPLIANCE_ASSERTIONS]
+def test_templates_pass_no_compliance_assertion_check() -> None:
+    """AUTHORING-TIME safety on the template STRINGS themselves, via the REAL
+    gate (ADR-0010 §2 — test the gate, not a re-implemented copy).
+
+    Each template constant must PASS the gate's own `no_compliance_assertion`
+    check. This is the load-bearing static guarantee: a template that tripped the
+    denylist would make EVERY fallback for that status SILENTLY fail the gate —
+    and the length bound would never catch it (it is a content check, ADR-0011
+    §4). The control args are irrelevant to this check; dummies suffice."""
     for template in _ALL_TEMPLATES:
-        norm = normalize(template)
-        for phrase, original in zip(norm_phrases, COMPLIANCE_ASSERTIONS):
-            assert phrase not in norm, (
-                f"template {template!r} contains denylisted assertion {original!r}"
-            )
+        verdict = verify_explanation(
+            template, control_code="PDPL-X", control_title_ar="عنوان"
+        )
+        assert verdict.no_compliance_assertion.passed, (
+            f"template {template!r} trips the no_compliance_assertion check: "
+            f"{verdict.no_compliance_assertion.reason}"
+        )
 
 
 def test_fallback_passes_full_gate_on_all_golden_cases() -> None:
