@@ -123,7 +123,7 @@ async def run(explainer: Explainer, cases: Sequence[GoldenCase]) -> EvalMetrics:
 
     for case in cases:
         try:
-            candidate = await explainer.explain(case.gap)
+            candidate = (await explainer.explain(case.gap)).text
         except Exception as exc:  # real-model failure — record, do not abort
             results.append(
                 CaseResult(

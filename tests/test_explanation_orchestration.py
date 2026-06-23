@@ -20,6 +20,7 @@ import uuid
 
 from pdpl.ai.explainer import (
     ExplainerError,
+    ExplainerOutput,
     GapContext,
     StubExplainer,
     TransientExplainerError,
@@ -79,9 +80,23 @@ class _RaisingExplainer:
     def __init__(self) -> None:
         self.calls: list[GapContext] = []
 
-    async def explain(self, ctx: GapContext) -> str:
+    async def explain(self, ctx: GapContext) -> ExplainerOutput:
         self.calls.append(ctx)
         raise TransientExplainerError("simulated exhausted retries")
+
+
+class _VersionedExplainer:
+    """A good explainer that reports a concrete model_version — models the real
+    Gemini call surfacing its resolved modelVersion (ADR-0011 §6)."""
+
+    def __init__(self, *, text: str, model_version: str) -> None:
+        self._text = text
+        self._model_version = model_version
+        self.calls: list[GapContext] = []
+
+    async def explain(self, ctx: GapContext) -> ExplainerOutput:
+        self.calls.append(ctx)
+        return ExplainerOutput(text=self._text, model_version=self._model_version)
 
 
 # ---------------------------------------------------------------------
@@ -178,6 +193,20 @@ async def test_explainer_error_falls_back(app) -> None:
     assert result.source == "fallback"
     assert result.reason == "explainer_error"
     assert result.text == deterministic_fallback(ctx)
+
+
+async def test_model_version_is_propagated_to_the_result(app) -> None:
+    """ai_verified provenance: the concrete model_version the explainer reported
+    is surfaced on the ExplanationResult (ADR-0011 §6). It is NOT in the cache
+    key (a different gap/nonce, so this is a fresh miss)."""
+    ctx = _ctx()
+    explainer = _VersionedExplainer(text=_GOOD_AR, model_version="gemini-2.5-flash-002")
+
+    async with session_scope() as session:
+        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+
+    assert result.source == "ai_verified"
+    assert result.model_version == "gemini-2.5-flash-002"
 
 
 def test_explainer_error_is_an_explainer_error_subclass() -> None:

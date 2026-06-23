@@ -144,7 +144,7 @@ async def explain_gap(
     counter("explanations.cache", result="miss")
 
     try:
-        candidate = await explainer.explain(ctx)
+        out = await explainer.explain(ctx)
     except ExplainerError as exc:
         _log.warning(
             "explanations.explainer_error",
@@ -153,6 +153,7 @@ async def explain_gap(
         )
         return _fallback(ctx, reason="explainer_error", failed_checks=[])
 
+    candidate = out.text
     passed, failed = _passes_gate(candidate, ctx)
     if not passed:
         return _fallback(ctx, reason="gate_rejected", failed_checks=failed)
@@ -166,5 +167,14 @@ async def explain_gap(
         model=model,
     )
     counter("explanations.served", source="ai_verified")
-    _log.info("explanations.verified", control_code=ctx.control_code, model=model)
-    return ExplanationResult(text=candidate, source="ai_verified")
+    _log.info(
+        "explanations.verified",
+        control_code=ctx.control_code,
+        model=model,
+        model_version=out.model_version,
+    )
+    # Provenance: the concrete model that produced THIS verified text (ADR-0011
+    # §6). None for a stub; populated for the real Gemini call.
+    return ExplanationResult(
+        text=candidate, source="ai_verified", model_version=out.model_version
+    )

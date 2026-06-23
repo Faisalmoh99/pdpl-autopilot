@@ -35,6 +35,7 @@ from pydantic import SecretStr
 
 from pdpl.ai.explainer import (
     ExplainerError,
+    ExplainerOutput,
     GapContext,
     PermanentExplainerError,
     TransientExplainerError,
@@ -114,7 +115,7 @@ class GeminiExplainer:
         last: ExplainerError | None = None
         for attempt in range(1, self._max_attempts + 1):
             try:
-                return await self._call_once(ctx, system, user, attempt)
+                return await self._call_once(ctx, system, user, attempt)  # ExplainerOutput
             except PermanentExplainerError:
                 raise
             except ExplainerError as exc:  # transient or unclassifiable base
@@ -133,7 +134,7 @@ class GeminiExplainer:
 
     async def _call_once(
         self, ctx: GapContext, system: str, user: str, attempt: int
-    ) -> str:
+    ) -> ExplainerOutput:
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -167,7 +168,20 @@ class GeminiExplainer:
             ) from exc
 
         self._raise_for_status(response.status_code)
-        text, total_tokens = self._parse(response)
+        text, total_tokens, model_version = self._parse(response)
+
+        # DETECT, not prevent (ADR-0011 §6): the cache key uses the REQUESTED id
+        # (model_version is unknown before the call). If the provider answered
+        # with a different concrete model than we requested — a floating alias
+        # silently re-pointed — warn so a human can notice and bump prompt_version
+        # (which busts the cache and re-rates). We never block on it.
+        if model_version is not None and model_version != self._model:
+            _log.warning(
+                "ai.gemini.model_version_mismatch",
+                requested_model=self._model,
+                returned_model_version=model_version,
+                prompt_version=PROMPT_VERSION,
+            )
 
         counter("ai.gemini.calls", 1, model=self._model, prompt_version=PROMPT_VERSION)
         if total_tokens is not None:
@@ -175,6 +189,7 @@ class GeminiExplainer:
         _log.info(
             "ai.gemini.explained",
             model=self._model,
+            model_version=model_version,
             prompt_version=PROMPT_VERSION,
             control_code=ctx.control_code,
             status=ctx.status,
@@ -182,7 +197,7 @@ class GeminiExplainer:
             total_tokens=total_tokens,
             api_key_fingerprint=_fingerprint(self._api_key.get_secret_value()),
         )
-        return text
+        return ExplainerOutput(text=text, model_version=model_version)
 
     @staticmethod
     def _raise_for_status(status: int) -> None:
@@ -201,8 +216,9 @@ class GeminiExplainer:
         raise ExplainerError(f"gemini returned unclassifiable status {status}")
 
     @staticmethod
-    def _parse(response: httpx.Response) -> tuple[str, int | None]:
-        """Extract the candidate text + approximate token usage.
+    def _parse(response: httpx.Response) -> tuple[str, int | None, str | None]:
+        """Extract the candidate text + approximate token usage + the concrete
+        `modelVersion` the provider answered with (ADR-0011 §6 provenance).
 
         Any completion that did not finish cleanly is PERMANENT and is NEVER
         returned as a partial string:
@@ -240,7 +256,10 @@ class GeminiExplainer:
 
         usage = data.get("usageMetadata") or {}
         total_tokens = usage.get("totalTokenCount")
-        return text, total_tokens
+        # The concrete model the API resolved the request to. Absent on older
+        # responses -> None (provenance simply unknown, never fabricated).
+        model_version = data.get("modelVersion")
+        return text, total_tokens, model_version
 
 
 def gemini_explainer_from_settings(settings) -> GeminiExplainer:
