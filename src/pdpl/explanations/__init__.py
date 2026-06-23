@@ -1,25 +1,27 @@
-"""Gap-explanation orchestration (ADR-0009 §4) — the app-layer wiring.
+"""Gap-explanation orchestration (ADR-0009 §4 / ADR-0011) — the app-layer wiring.
 
-This is the *application orchestration* that sequences: call the (untrusted)
-`Explainer` -> run the (trusted) `verify_explanation` gate -> on failure fall
-back to the deterministic `rationale`. It lives OUTSIDE the decision core,
-because it imports `pdpl.ai` (which the core may never touch) and
-`pdpl.verification`; putting it in `pdpl.services.*` would violate the
-core-must-not-import-AI contract.
+The runtime path that sequences cache + (untrusted) `Explainer` + the (trusted)
+`verify_explanation` gate + the deterministic fallback floor. It lives OUTSIDE
+the decision core: it imports `pdpl.ai` (which the core may never touch),
+`pdpl.verification`, `pdpl.catalog`, and `pdpl.db`; putting it in
+`pdpl.services.*` would violate the core-must-not-import-AI contract, and the
+`explanations-no-decision-core` contract (ADR-0011 §7) keeps it from importing
+the engine in turn — it reads a `ControlDecision` as DATA, never recomputes one.
 
-The decision core neither produces nor consumes AI output — it only emits the
-deterministic verdict the explainer later reads as data. The fallback path is
-modelled on the worker's discipline (ADR-0008): a failure is caught and turned
-into a safe outcome, never propagated to the user.
+  - `build_gap_context` (ADR-0011 §1): the pure assembler + the live catalog
+    join — the runtime grounding the model receives, proven identical to what
+    the eval rated.
+  - `explain_gap` (ADR-0011 §2): cache get -> re-gate on hit / miss -> explain
+    -> gate -> put -> return, with the gate as the single chokepoint every
+    user-facing string passes through. Returns an `ExplanationResult`.
 
-The HTTP / findings wiring that calls this is deferred (ADR-0009 open
-questions); this module is a pure, testable function the C1 tests drive
-directly.
+The HTTP / session / trigger wiring that calls this is deferred to C4b (ADR-0009
+open questions, left open by ADR-0011).
 """
 
 from __future__ import annotations
 
 from pdpl.explanations.context import build_gap_context
-from pdpl.explanations.orchestrator import explain_gap
+from pdpl.explanations.orchestrator import ExplanationResult, explain_gap
 
-__all__ = ["build_gap_context", "explain_gap"]
+__all__ = ["ExplanationResult", "build_gap_context", "explain_gap"]
