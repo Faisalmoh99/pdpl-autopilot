@@ -129,3 +129,21 @@ forbidden_modules =
     pdpl.services
     pdpl.verification
     pdpl.explanations
+
+# Contract 7 (C4a, ADR-0011 §7): the runtime orchestration may not import the
+# decision core. `pdpl.explanations` receives the engine's `ControlDecision`
+# AS DATA via dependency injection (the C4b endpoint composes the decider with
+# `explain_gap` OUTSIDE this layer). Forbidding the import is a free lock of a
+# real boundary: the explanation layer reads a deterministic verdict and can
+# never reach back to recompute or feed into one. It freely imports pdpl.ai
+# (the producer), pdpl.verification (the gate), pdpl.catalog (the join), and
+# pdpl.db (the cache) — only the decision core is closed.
+[importlinter:contract:explanations-no-decision-core]
+name = Runtime orchestration must not import the deterministic decision core
+type = forbidden
+source_modules =
+    pdpl.explanations
+forbidden_modules =
+    pdpl.services.decision
+    pdpl.services.checks
+    pdpl.services.scoring
