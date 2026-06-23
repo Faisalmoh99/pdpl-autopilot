@@ -19,6 +19,7 @@ directly.
 
 from __future__ import annotations
 
+from pdpl.explanations.context import build_gap_context
 from pdpl.explanations.orchestrator import explain_gap
 
-__all__ = ["explain_gap"]
+__all__ = ["build_gap_context", "explain_gap"]
