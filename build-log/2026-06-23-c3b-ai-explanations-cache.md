@@ -83,6 +83,11 @@ tests/test_architecture.py .                   1 passed   (importlinter contract
 - **`model` in the key busts only on a STRING change.** If the provider silently re-points the
   `gemini-2.5-flash` alias to a new snapshot, the key does not change and a stale explanation could be
   served. Mitigation (pin a dated model id) is discipline, deferred — recorded here, not built.
+  **The cache amplifies the C3a model-alias gap:** without persistence a silent snapshot swap was a
+  one-off stale answer; now the first explanation under the unchanged alias is **persisted** and
+  re-served indefinitely (the `DO NOTHING` "first write wins" semantic), so the staleness sticks until
+  a `prompt_version`/`model` string change busts the key. Same fix (pin a dated model id), now with a
+  sharper reason. Logged design gap, not testable behaviour.
 
 ## Out of scope (unchanged from the brief)
 
