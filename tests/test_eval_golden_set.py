@@ -20,7 +20,7 @@ from importing the decision core.
 
 from __future__ import annotations
 
-from pdpl.catalog import prompts_ar_for
+from pdpl.catalog import control_by_code, prompts_ar_for
 from pdpl.eval.golden_set import load_golden_set
 from pdpl.services.decision import build_control_decider, build_deterministic_decider
 
@@ -46,6 +46,29 @@ def test_unsatisfied_questions_ar_is_faithful_to_engine_and_catalog() -> None:
         rebuilt = prompts_ar_for(decision.unsatisfied_codes)
         assert rebuilt == case.gap.unsatisfied_questions_ar, (
             f"{case.id}: unsatisfied_questions_ar drifted from engine+catalog"
+        )
+
+
+def test_control_text_is_faithful_to_the_catalog() -> None:
+    """The C4b control-text guard (ADR-0011 §"control-text gap").
+
+    Every case's `control_title_ar` / `control_description_ar` / `severity_weight`
+    must equal the seeded catalogue value for its control, looked up by
+    `control_code` — proving the rated golden set's control text is the SAME text
+    the C4b runtime grounds the explainer on (`pdpl.catalog.SEEDED_CONTROLS`,
+    drift-pinned to migration 0003), not a hand-typed lookalike. Closes the gap
+    the C4a identity test left open (it covered `unsatisfied_questions_ar` only).
+    """
+    for case in load_golden_set():
+        seeded = control_by_code(case.gap.control_code)
+        assert case.gap.control_title_ar == seeded.title_ar, (
+            f"{case.id}: control_title_ar drifted from the catalog"
+        )
+        assert case.gap.control_description_ar == seeded.description_ar, (
+            f"{case.id}: control_description_ar drifted from the catalog"
+        )
+        assert case.gap.severity_weight == seeded.severity_weight, (
+            f"{case.id}: severity_weight drifted from the catalog"
         )
 
 

@@ -30,7 +30,7 @@ from types import ModuleType
 
 import pytest
 
-from pdpl.catalog import SEEDED_QUESTIONS
+from pdpl.catalog import SEEDED_CONTROLS, SEEDED_QUESTIONS
 
 # The migration's seed, frozen as a 5-tuple per row:
 #   (control_code, code, prompt_en, prompt_ar, display_order)
@@ -151,4 +151,191 @@ def test_code_sets_match_in_both_directions(migration_seed) -> None:
 
 def test_catalog_codes_are_unique() -> None:
     codes = [q.code for q in SEEDED_QUESTIONS]
+    assert len(codes) == len(set(codes))
+
+
+# =====================================================================
+# Controls (C4b, ADR-0011 §"control-text gap"). The SAME C3a discipline,
+# one layer up: the explainer's control TEXT (`title_ar`/`description_ar`)
+# and `severity_weight` must be a proven-faithful mirror of migration 0003,
+# not hand-typed lookalikes. Mirrors the questions section above exactly.
+# =====================================================================
+
+# Migration 0003's control seed, frozen as an 8-tuple per row:
+#   (code, title_en, title_ar, description_en, description_ar, category,
+#    severity_weight, effective_from)
+# Captured VERBATIM from `git show main:0003_seed_controls.py` — the genuine
+# PRE-REFACTOR original (the inline SQL INSERT), extracted by parsing that SQL,
+# NOT re-derived from the new `_SEED_CONTROLS` constant (which would make the
+# proof circular). This is the golden the parameterized restructure must
+# reproduce exactly — do not "tidy" these strings.
+_ORIGINAL_SEED_CONTROLS: tuple[
+    tuple[str, str, str, str, str, str, float, str], ...
+] = (
+    (
+        "PDPL-ART4-DSR-ACCESS",
+        "Right of access to personal data",
+        "حق الوصول إلى البيانات الشخصية",
+        "The data subject has the right to obtain access to their personal data held by the controller, including the categories of data, purposes of processing, and recipients.",
+        "لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة.",
+        "data_subject_rights",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART4-DSR-CORRECT",
+        "Right to correction of personal data",
+        "حق تصحيح البيانات الشخصية",
+        "The data subject has the right to request correction of their personal data when it is inaccurate, incomplete, or outdated.",
+        "لصاحب البيانات الشخصية الحق في طلب تصحيح بياناته الشخصية إذا كانت غير صحيحة أو غير مكتملة أو غير محدثة.",
+        "data_subject_rights",
+        6.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART4-DSR-DELETE",
+        "Right to deletion of personal data",
+        "حق حذف البيانات الشخصية",
+        "The data subject has the right to request deletion of their personal data when it is no longer necessary for the purposes for which it was collected, subject to legal retention obligations.",
+        "لصاحب البيانات الشخصية الحق في طلب حذف بياناته الشخصية متى انتفت الحاجة إليها للغرض الذي جمعت من أجله، مع مراعاة الالتزامات النظامية للاحتفاظ.",
+        "data_subject_rights",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART5-LAWFUL-BASIS",
+        "Lawful basis for processing personal data",
+        "الأساس النظامي لمعالجة البيانات الشخصية",
+        "Personal data may only be processed for a specific, declared, and legitimate purpose, with a lawful basis such as explicit consent, performance of a contract, or compliance with a legal obligation.",
+        "لا يجوز معالجة البيانات الشخصية إلا لغرض محدد ومعلن ومشروع، استناداً إلى أساس نظامي كالموافقة الصريحة أو تنفيذ عقد أو الالتزام بنص نظامي.",
+        "lawful_basis",
+        9.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Privacy notice disclosure to data subjects",
+        "إفصاح إشعار الخصوصية لأصحاب البيانات",
+        "The controller must disclose to data subjects the purposes of processing, categories of data collected, recipients, retention periods, and rights, in clear and accessible language prior to collection.",
+        "يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع.",
+        "transparency",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART19-SECURITY-MEASURES",
+        "Technical and organisational security measures",
+        "التدابير الفنية والتنظيمية لحماية البيانات",
+        "The controller must implement technical and organisational measures appropriate to the risk to protect personal data against unauthorised access, disclosure, loss, alteration, or destruction.",
+        "يجب على جهة التحكم اتخاذ التدابير الفنية والتنظيمية الملائمة لمستوى الخطر لحماية البيانات الشخصية من الوصول غير المصرح به والإفصاح والفقد والتعديل والإتلاف.",
+        "security",
+        9.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART20-BREACH-NOTIFY-72H",
+        "Personal data breach notification within 72 hours",
+        "إشعار تسرب البيانات الشخصية خلال 72 ساعة",
+        "In the event of a personal data breach likely to harm data subjects, the controller must notify the competent authority within 72 hours of becoming aware of the breach, and notify affected data subjects without undue delay.",
+        "في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر.",
+        "breach_notification",
+        10.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART25-RETENTION-LIMITS",
+        "Retention limits for personal data",
+        "حدود الاحتفاظ بالبيانات الشخصية",
+        "Personal data must not be retained beyond the period necessary for the purpose of processing, unless a separate legal or regulatory obligation requires longer retention.",
+        "لا يجوز الاحتفاظ بالبيانات الشخصية لمدة تتجاوز ما تستلزمه أغراض المعالجة، ما لم يوجد التزام نظامي مستقل يستوجب مدة احتفاظ أطول.",
+        "retention",
+        6.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART29-CROSS-BORDER",
+        "Cross-border transfer of personal data",
+        "نقل البيانات الشخصية خارج المملكة",
+        "Transfer of personal data outside the Kingdom requires an appropriate legal basis and adequate safeguards, in accordance with the conditions set by the competent authority.",
+        "يستلزم نقل البيانات الشخصية خارج المملكة وجود أساس نظامي مناسب وضمانات كافية وفق الضوابط التي تحددها الجهة المختصة.",
+        "cross_border_transfer",
+        8.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART31-ROPA",
+        "Records of processing activities",
+        "سجل عمليات معالجة البيانات الشخصية",
+        "The controller must maintain a record of personal-data processing activities including purposes, categories of data subjects and data, recipients, retention periods, and security measures, and make it available to the competent authority on request.",
+        "يجب على جهة التحكم مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب.",
+        "records_of_processing",
+        5.0,
+        "2023-09-14",
+    ),
+)
+
+
+def _load_migration_0003() -> ModuleType:
+    """Load migration 0003 by revision-prefix glob, without importing it as a
+    dotted module (its filename is not a valid identifier)."""
+    matches = sorted(_VERSIONS_DIR.glob("0003_*.py"))
+    assert len(matches) == 1, f"expected exactly one 0003_*.py, found {matches}"
+    spec = importlib.util.spec_from_file_location("_mig_0003", matches[0])
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def migration_control_seed() -> tuple[
+    tuple[str, str, str, str, str, str, float, str], ...
+]:
+    return _load_migration_0003()._SEED_CONTROLS
+
+
+def test_migration_0003_constant_reproduces_the_original_seed(
+    migration_control_seed,
+) -> None:
+    """ROW PRESERVATION: the restructured migration's frozen `_SEED_CONTROLS`
+    equals the genuine pre-refactor inline-SQL values, verbatim and in order."""
+    assert migration_control_seed == _ORIGINAL_SEED_CONTROLS
+
+
+def test_catalog_mirrors_the_migration_controls_verbatim(
+    migration_control_seed,
+) -> None:
+    """SINGLE SOURCE OF TRUTH: the catalogue mirrors every literal column the
+    migration seeds, exactly. This is what makes the explainer's control text
+    provably faithful to what migration 0003 put in the DB."""
+    catalog_rows = {
+        c.code: (
+            c.title_en,
+            c.title_ar,
+            c.description_en,
+            c.description_ar,
+            c.category,
+            c.severity_weight,
+            c.effective_from,
+        )
+        for c in SEEDED_CONTROLS
+    }
+    migration_rows = {
+        code: (te, ta, de, da, cat, sev, eff)
+        for (code, te, ta, de, da, cat, sev, eff) in migration_control_seed
+    }
+    assert catalog_rows == migration_rows
+
+
+def test_control_code_sets_match_in_both_directions(
+    migration_control_seed,
+) -> None:
+    """No control exists on one side only — the mirror is total."""
+    catalog_codes = {c.code for c in SEEDED_CONTROLS}
+    migration_codes = {row[0] for row in migration_control_seed}
+    assert catalog_codes == migration_codes
+
+
+def test_catalog_control_codes_are_unique() -> None:
+    codes = [c.code for c in SEEDED_CONTROLS]
     assert len(codes) == len(set(codes))
