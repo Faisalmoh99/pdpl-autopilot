@@ -1,10 +1,39 @@
 """The gap-explanation prompt — version `gap-ar-v1` (ADR-0009 §1, C3a).
 
-Kept in its own module so prompt-version governance is one obvious place
-(ADR-0009 open question). `PROMPT_VERSION` is part of the C3b content-hash
-cache key: bump it whenever the system instruction, the rendering, or the
-seeded question wording changes, so a stale cached explanation is never served
-(ADR-0009 §6).
+Kept in its own module so prompt-version governance is one obvious place.
+
+PROMPT-VERSION GOVERNANCE (ADR-0013 — the rule, enforced by mechanism). The
+content-hash cache key (`pdpl.db.ai_explanations`) keys on six fields, but the
+prompt below embeds MORE than the key sees: the control's `title_ar` +
+`description_ar`, its `severity_weight` (via `_severity_ar`), the unsatisfied
+questions' text, the `SYSTEM_INSTRUCTION`, and the rendering itself. None of that
+is a key field, so it must be FROZEN for a given `PROMPT_VERSION`. The invariant:
+*everything that influences the model's output but is not a cache-key field must
+be frozen per `prompt_version`.* Therefore **bump `PROMPT_VERSION`** (single
+counter, `gap-ar-vN -> vN+1`) whenever:
+
+  (a) this template / rendering changes (`SYSTEM_INSTRUCTION`, `build_user_prompt`,
+      `_STATUS_AR`, `_severity_ar`); OR
+  (b) the catalog text the prompt embeds is re-seeded (a question's `prompt_ar`,
+      or a control's `title_ar` / `description_ar` / `severity_weight`).
+
+A bump retires the old cache namespace (old keys are never read again, recomputed
+lazily — ADR-0013 §5) AND requires RE-RUNNING the eval + re-rating: the human
+`quality_score` baseline (4.79) is pinned to `gap-ar-v1` via `quality_score_run`
+and does not carry forward. `tests/test_prompt_version_governance.py` pins a hash
+of the real rendered surface to `PROMPT_VERSION` and fails the build on an
+un-bumped change. (Triggers (a)/(b) are guarded there; a `modelVersion` alias
+re-point — ADR-0011 §6 — is a post-call value that cannot be guarded and is a
+mandatory human review instead.) Changing the configured `model` alias is NOT a
+bump — `model` is itself a key field, so it busts the cache on its own.
+
+PER-VERSION CHANGELOG (one line per bump — what changed and why):
+  - gap-ar-v1 — initial prompt (C3a): WHY-this-is-a-gap + one remediation step,
+    binds to the control, never asserts compliance. The rendering has embedded
+    `title_ar` + `description_ar` + the severity line + the unsatisfied questions
+    since C3a; the eval's v1 rating (4.79) was produced against this surface. C4b
+    did not change this template — it moved the control text to `SEEDED_CONTROLS`
+    (drift-pinned, re-seedable), which is what makes trigger (b) real.
 
 Design (ADR-0009 §1 / the safety line): explain WHY this is a gap to a
 non-technical Saudi business owner, in clear Arabic, give ONE concrete
