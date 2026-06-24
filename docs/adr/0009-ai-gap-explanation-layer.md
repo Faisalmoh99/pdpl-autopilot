@@ -169,6 +169,6 @@ This table is distinct from `findings.ai_explanation_ar` (data model): that colu
 
 ## Open questions (deferred)
 
-- **Where the on-demand explanation is triggered** (a dedicated endpoint vs. enriching the existing readiness/gap-report response) — an API-shape decision deferred to the wiring session.
-- **Prompt-version governance** — how `prompt_version` is bumped and reviewed when the prompt changes. For now it is a constant in `pdpl.ai`; a lightweight process can come when prompts change often.
-- **Persisting into `findings.ai_explanation_ar`** vs. serving purely from the content-hash cache — decided when the wiring lands; the cache is the source of truth for now.
+- **Where the on-demand explanation is triggered** (a dedicated endpoint vs. enriching the existing readiness/gap-report response) — an API-shape decision deferred to the wiring session. **RESOLVED in [ADR-0012](0012-explanation-http-surface.md) §1: a dedicated `POST /tenants/{id}/explanations`.**
+- **Prompt-version governance** — how `prompt_version` is bumped and reviewed when the prompt changes. For now it is a constant in `pdpl.ai`; a lightweight process can come when prompts change often. (Still open.)
+- **Persisting into `findings.ai_explanation_ar`** vs. serving purely from the content-hash cache — decided when the wiring lands; the cache is the source of truth for now. **RESOLVED in [ADR-0012](0012-explanation-http-surface.md) §6: no persistence; serve via the cache, the column stays a placeholder.**

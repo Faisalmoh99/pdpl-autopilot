@@ -39,9 +39,13 @@ Create Date: 2026-06-12
 """
 from __future__ import annotations
 
+import uuid
+from datetime import date
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "0003_seed_controls"
@@ -50,21 +54,128 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-# Single source of truth for the codes we seed. Used by both upgrade
-# (INSERT) and downgrade (DELETE WHERE code IN (...)) so the downgrade
-# removes EXACTLY what the upgrade added — never user-added rows.
-_SEED_CONTROL_CODES: tuple[str, ...] = (
-    "PDPL-ART4-DSR-ACCESS",
-    "PDPL-ART4-DSR-CORRECT",
-    "PDPL-ART4-DSR-DELETE",
-    "PDPL-ART5-LAWFUL-BASIS",
-    "PDPL-ART12-PRIVACY-NOTICE",
-    "PDPL-ART19-SECURITY-MEASURES",
-    "PDPL-ART20-BREACH-NOTIFY-72H",
-    "PDPL-ART25-RETENTION-LIMITS",
-    "PDPL-ART29-CROSS-BORDER",
-    "PDPL-ART31-ROPA",
+# FROZEN seed literals — the single, self-contained source this migration
+# inserts from. Each row mirrors the literal columns seeded into `controls`:
+# (code, title_en, title_ar, description_en, description_ar, category,
+# severity_weight, effective_from). `id` is generated, so it is not a literal.
+#
+# This migration stays REPLAYABLE and self-contained: it deliberately does NOT
+# import `pdpl.catalog`. The catalogue (`pdpl.catalog.SEEDED_CONTROLS`) is the
+# authoritative copy for the running app; `tests/test_catalog_seed_drift.py`
+# pins the two together VERBATIM (and pins THIS constant against a frozen golden
+# of the originally-seeded values captured from `git show` of the pre-refactor
+# migration), so the C4b restructure to a parameterized insert is a PROVEN
+# row-preserving change, not an asserted one. Alembic keys on the revision id,
+# so an already-applied database never re-runs this body.
+#
+# NON-AUTHORITATIVE STARTER SET — see the module docstring. Not legal advice.
+_SEED_CONTROLS: tuple[tuple[str, str, str, str, str, str, float, str], ...] = (
+    (
+        "PDPL-ART4-DSR-ACCESS",
+        "Right of access to personal data",
+        "حق الوصول إلى البيانات الشخصية",
+        "The data subject has the right to obtain access to their personal data held by the controller, including the categories of data, purposes of processing, and recipients.",
+        "لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة.",
+        "data_subject_rights",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART4-DSR-CORRECT",
+        "Right to correction of personal data",
+        "حق تصحيح البيانات الشخصية",
+        "The data subject has the right to request correction of their personal data when it is inaccurate, incomplete, or outdated.",
+        "لصاحب البيانات الشخصية الحق في طلب تصحيح بياناته الشخصية إذا كانت غير صحيحة أو غير مكتملة أو غير محدثة.",
+        "data_subject_rights",
+        6.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART4-DSR-DELETE",
+        "Right to deletion of personal data",
+        "حق حذف البيانات الشخصية",
+        "The data subject has the right to request deletion of their personal data when it is no longer necessary for the purposes for which it was collected, subject to legal retention obligations.",
+        "لصاحب البيانات الشخصية الحق في طلب حذف بياناته الشخصية متى انتفت الحاجة إليها للغرض الذي جمعت من أجله، مع مراعاة الالتزامات النظامية للاحتفاظ.",
+        "data_subject_rights",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART5-LAWFUL-BASIS",
+        "Lawful basis for processing personal data",
+        "الأساس النظامي لمعالجة البيانات الشخصية",
+        "Personal data may only be processed for a specific, declared, and legitimate purpose, with a lawful basis such as explicit consent, performance of a contract, or compliance with a legal obligation.",
+        "لا يجوز معالجة البيانات الشخصية إلا لغرض محدد ومعلن ومشروع، استناداً إلى أساس نظامي كالموافقة الصريحة أو تنفيذ عقد أو الالتزام بنص نظامي.",
+        "lawful_basis",
+        9.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART12-PRIVACY-NOTICE",
+        "Privacy notice disclosure to data subjects",
+        "إفصاح إشعار الخصوصية لأصحاب البيانات",
+        "The controller must disclose to data subjects the purposes of processing, categories of data collected, recipients, retention periods, and rights, in clear and accessible language prior to collection.",
+        "يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع.",
+        "transparency",
+        7.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART19-SECURITY-MEASURES",
+        "Technical and organisational security measures",
+        "التدابير الفنية والتنظيمية لحماية البيانات",
+        "The controller must implement technical and organisational measures appropriate to the risk to protect personal data against unauthorised access, disclosure, loss, alteration, or destruction.",
+        "يجب على جهة التحكم اتخاذ التدابير الفنية والتنظيمية الملائمة لمستوى الخطر لحماية البيانات الشخصية من الوصول غير المصرح به والإفصاح والفقد والتعديل والإتلاف.",
+        "security",
+        9.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART20-BREACH-NOTIFY-72H",
+        "Personal data breach notification within 72 hours",
+        "إشعار تسرب البيانات الشخصية خلال 72 ساعة",
+        "In the event of a personal data breach likely to harm data subjects, the controller must notify the competent authority within 72 hours of becoming aware of the breach, and notify affected data subjects without undue delay.",
+        "في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر.",
+        "breach_notification",
+        10.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART25-RETENTION-LIMITS",
+        "Retention limits for personal data",
+        "حدود الاحتفاظ بالبيانات الشخصية",
+        "Personal data must not be retained beyond the period necessary for the purpose of processing, unless a separate legal or regulatory obligation requires longer retention.",
+        "لا يجوز الاحتفاظ بالبيانات الشخصية لمدة تتجاوز ما تستلزمه أغراض المعالجة، ما لم يوجد التزام نظامي مستقل يستوجب مدة احتفاظ أطول.",
+        "retention",
+        6.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART29-CROSS-BORDER",
+        "Cross-border transfer of personal data",
+        "نقل البيانات الشخصية خارج المملكة",
+        "Transfer of personal data outside the Kingdom requires an appropriate legal basis and adequate safeguards, in accordance with the conditions set by the competent authority.",
+        "يستلزم نقل البيانات الشخصية خارج المملكة وجود أساس نظامي مناسب وضمانات كافية وفق الضوابط التي تحددها الجهة المختصة.",
+        "cross_border_transfer",
+        8.0,
+        "2023-09-14",
+    ),
+    (
+        "PDPL-ART31-ROPA",
+        "Records of processing activities",
+        "سجل عمليات معالجة البيانات الشخصية",
+        "The controller must maintain a record of personal-data processing activities including purposes, categories of data subjects and data, recipients, retention periods, and security measures, and make it available to the competent authority on request.",
+        "يجب على جهة التحكم مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب.",
+        "records_of_processing",
+        5.0,
+        "2023-09-14",
+    ),
 )
+
+# Derived from the frozen rows so it can never drift from them. Used by both
+# upgrade (the seed) and downgrade (DELETE WHERE code IN (...)) so the downgrade
+# removes EXACTLY what the upgrade added — never user-added rows.
+_SEED_CONTROL_CODES: tuple[str, ...] = tuple(row[0] for row in _SEED_CONTROLS)
 
 
 def upgrade() -> None:
@@ -99,112 +210,53 @@ def upgrade() -> None:
     )
 
     # ------------------------------------------------------------------
-    # 3. Seed the 10 starter controls.
+    # 3. Seed the 10 starter controls from the frozen `_SEED_CONTROLS` rows via
+    #    a PARAMETERIZED bulk insert: the driver binds every value, so the
+    #    Arabic text and the lone English apostrophe are encoded correctly
+    #    without any hand-escaping (the C4b restructure of the original inline
+    #    INSERT; row-preservation is proven offline in the drift test).
     #
-    # gen_random_uuid() is used here (not uuid7) per the noted decision
-    # in docs/02-data-model.md: ad-hoc / migration inserts use v4 UUIDs;
-    # the natural key in this seed is `code`. The downgrade matches on
-    # `code` so v4 vs v7 is irrelevant for reversal.
+    #    `id` is generated here (v4) per docs/02-data-model.md: ad-hoc /
+    #    migration inserts use v4 UUIDs; the natural key is `code`, which the
+    #    downgrade matches on, so v4 vs v7 is irrelevant for reversal.
     # ------------------------------------------------------------------
-    op.execute(
-        """
-        INSERT INTO controls (
-            id, code,
-            title_en, title_ar,
-            description_en, description_ar,
-            category, severity_weight, effective_from
-        ) VALUES
-        (
-            gen_random_uuid(),
-            'PDPL-ART4-DSR-ACCESS',
-            'Right of access to personal data',
-            'حق الوصول إلى البيانات الشخصية',
-            'The data subject has the right to obtain access to their personal data held by the controller, including the categories of data, purposes of processing, and recipients.',
-            'لصاحب البيانات الشخصية الحق في الوصول إلى بياناته الشخصية المحفوظة لدى جهة التحكم، بما في ذلك فئات البيانات وأغراض المعالجة والجهات المستلمة.',
-            'data_subject_rights', 7.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART4-DSR-CORRECT',
-            'Right to correction of personal data',
-            'حق تصحيح البيانات الشخصية',
-            'The data subject has the right to request correction of their personal data when it is inaccurate, incomplete, or outdated.',
-            'لصاحب البيانات الشخصية الحق في طلب تصحيح بياناته الشخصية إذا كانت غير صحيحة أو غير مكتملة أو غير محدثة.',
-            'data_subject_rights', 6.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART4-DSR-DELETE',
-            'Right to deletion of personal data',
-            'حق حذف البيانات الشخصية',
-            'The data subject has the right to request deletion of their personal data when it is no longer necessary for the purposes for which it was collected, subject to legal retention obligations.',
-            'لصاحب البيانات الشخصية الحق في طلب حذف بياناته الشخصية متى انتفت الحاجة إليها للغرض الذي جمعت من أجله، مع مراعاة الالتزامات النظامية للاحتفاظ.',
-            'data_subject_rights', 7.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART5-LAWFUL-BASIS',
-            'Lawful basis for processing personal data',
-            'الأساس النظامي لمعالجة البيانات الشخصية',
-            'Personal data may only be processed for a specific, declared, and legitimate purpose, with a lawful basis such as explicit consent, performance of a contract, or compliance with a legal obligation.',
-            'لا يجوز معالجة البيانات الشخصية إلا لغرض محدد ومعلن ومشروع، استناداً إلى أساس نظامي كالموافقة الصريحة أو تنفيذ عقد أو الالتزام بنص نظامي.',
-            'lawful_basis', 9.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART12-PRIVACY-NOTICE',
-            'Privacy notice disclosure to data subjects',
-            'إفصاح إشعار الخصوصية لأصحاب البيانات',
-            'The controller must disclose to data subjects the purposes of processing, categories of data collected, recipients, retention periods, and rights, in clear and accessible language prior to collection.',
-            'يجب على جهة التحكم إفصاح أغراض المعالجة وفئات البيانات المجموعة والجهات المستلمة ومدد الاحتفاظ وحقوق صاحب البيانات بلغة واضحة وسهلة الوصول قبل عملية الجمع.',
-            'transparency', 7.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART19-SECURITY-MEASURES',
-            'Technical and organisational security measures',
-            'التدابير الفنية والتنظيمية لحماية البيانات',
-            'The controller must implement technical and organisational measures appropriate to the risk to protect personal data against unauthorised access, disclosure, loss, alteration, or destruction.',
-            'يجب على جهة التحكم اتخاذ التدابير الفنية والتنظيمية الملائمة لمستوى الخطر لحماية البيانات الشخصية من الوصول غير المصرح به والإفصاح والفقد والتعديل والإتلاف.',
-            'security', 9.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART20-BREACH-NOTIFY-72H',
-            'Personal data breach notification within 72 hours',
-            'إشعار تسرب البيانات الشخصية خلال 72 ساعة',
-            'In the event of a personal data breach likely to harm data subjects, the controller must notify the competent authority within 72 hours of becoming aware of the breach, and notify affected data subjects without undue delay.',
-            'في حال وقوع تسرب للبيانات الشخصية قد يضر بأصحابها، يجب على جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر.',
-            'breach_notification', 10.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART25-RETENTION-LIMITS',
-            'Retention limits for personal data',
-            'حدود الاحتفاظ بالبيانات الشخصية',
-            'Personal data must not be retained beyond the period necessary for the purpose of processing, unless a separate legal or regulatory obligation requires longer retention.',
-            'لا يجوز الاحتفاظ بالبيانات الشخصية لمدة تتجاوز ما تستلزمه أغراض المعالجة، ما لم يوجد التزام نظامي مستقل يستوجب مدة احتفاظ أطول.',
-            'retention', 6.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART29-CROSS-BORDER',
-            'Cross-border transfer of personal data',
-            'نقل البيانات الشخصية خارج المملكة',
-            'Transfer of personal data outside the Kingdom requires an appropriate legal basis and adequate safeguards, in accordance with the conditions set by the competent authority.',
-            'يستلزم نقل البيانات الشخصية خارج المملكة وجود أساس نظامي مناسب وضمانات كافية وفق الضوابط التي تحددها الجهة المختصة.',
-            'cross_border_transfer', 8.0, DATE '2023-09-14'
-        ),
-        (
-            gen_random_uuid(),
-            'PDPL-ART31-ROPA',
-            'Records of processing activities',
-            'سجل عمليات معالجة البيانات الشخصية',
-            'The controller must maintain a record of personal-data processing activities including purposes, categories of data subjects and data, recipients, retention periods, and security measures, and make it available to the competent authority on request.',
-            'يجب على جهة التحكم مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب.',
-            'records_of_processing', 5.0, DATE '2023-09-14'
-        );
-        """
+    controls_table = sa.table(
+        "controls",
+        sa.column("id", postgresql.UUID(as_uuid=True)),
+        sa.column("code", sa.Text()),
+        sa.column("title_en", sa.Text()),
+        sa.column("title_ar", sa.Text()),
+        sa.column("description_en", sa.Text()),
+        sa.column("description_ar", sa.Text()),
+        sa.column("category", sa.Text()),
+        sa.column("severity_weight", sa.Numeric(4, 2)),
+        sa.column("effective_from", sa.Date()),
+    )
+    op.bulk_insert(
+        controls_table,
+        [
+            {
+                "id": uuid.uuid4(),
+                "code": code,
+                "title_en": title_en,
+                "title_ar": title_ar,
+                "description_en": description_en,
+                "description_ar": description_ar,
+                "category": category,
+                "severity_weight": severity_weight,
+                "effective_from": date.fromisoformat(effective_from),
+            }
+            for (
+                code,
+                title_en,
+                title_ar,
+                description_en,
+                description_ar,
+                category,
+                severity_weight,
+                effective_from,
+            ) in _SEED_CONTROLS
+        ],
     )
 
     # ------------------------------------------------------------------
