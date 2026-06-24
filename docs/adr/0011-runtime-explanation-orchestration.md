@@ -144,11 +144,11 @@ The existing rated run (`gemini-2.5-flash_gap-ar-v1_20260622T195344Z`) is **not*
 - **A long fallback can exceed the length bound.** A `non_compliant` control with many unsatisfied questions produces an enumeration over 800 chars. Served directly as the safe floor; length is a content concern, not safety, and truncating it would reintroduce the C3a failure.
 - **A poisoned cache row is served as fallback on every read until a `prompt_version` bump.** Immutability at the DB role means it cannot be deleted; the `cache_regate_failed` counter is the standing signal. Accepted — the alternative (a delete path) would weaken the audit/immutability guarantee for a case that should never occur.
 
-## Open questions (deferred to C4b — left OPEN, not closed here)
+## Open questions (deferred to C4b — RESOLVED in [ADR-0012](0012-explanation-http-surface.md))
 
-These remain exactly as ADR-0009 left them; this ADR does **not** resolve them:
+These were left open here; all four are now resolved in [ADR-0012](0012-explanation-http-surface.md):
 
-- **The HTTP surface** — a dedicated explanation endpoint vs. enriching the readiness/gap-report response.
-- **The request-scoped DB session** and the **trigger point** for an on-demand explanation.
-- **Persisting into `findings.ai_explanation_ar`** vs. serving purely from the content-hash cache.
-- **The control-text source** — DB `controls` read vs. a `pdpl.catalog.SEEDED_CONTROLS` leaf (with the drift test that closes the faithfulness gap above).
+- **The HTTP surface** — a dedicated explanation endpoint vs. enriching the readiness/gap-report response. → ADR-0012 §1: dedicated `POST /tenants/{id}/explanations` (§2: POST, for cacheability semantics).
+- **The request-scoped DB session** and the **trigger point** for an on-demand explanation. → ADR-0012 §3–§4: re-derive the structured verdict via the engine; the application-service owns `session_scope`; `explain_gap` unchanged.
+- **Persisting into `findings.ai_explanation_ar`** vs. serving purely from the content-hash cache. → ADR-0012 §6: no persistence; serve via the cache.
+- **The control-text source** — DB `controls` read vs. a `pdpl.catalog.SEEDED_CONTROLS` leaf (with the drift test that closes the faithfulness gap above). → ADR-0012 §3 + C4b commit 1: `SEEDED_CONTROLS`, drift-pinned to migration 0003, passed into the unchanged `build_gap_context`.
