@@ -80,6 +80,11 @@ where the rated `GapContext`'s control text becomes provably faithful to runtime
   assertion → `gate_rejected` fallback, never cached. Transport: unknown tenant/control → 404, missing
   body → 422, correlation id echoed.
 - Full suite green (**227 passed**); `.importlinter` 7 kept, 0 broken.
+- **Environment note (auditable):** during one full-suite run, 6 DB-touching tests
+  (`test_ai_explanations_cache.py`, `test_api_answers.py`) failed transiently with
+  `socket.gaierror: nodename nor servname provided` — DNS resolution to the Supabase host, a network
+  blip, **not** a code fault. Confirmed green on a targeted retry the same session (and a clean prior
+  full run). Recorded here so the pattern is traceable if it recurs.
 
 ## Out of scope (later)
 
