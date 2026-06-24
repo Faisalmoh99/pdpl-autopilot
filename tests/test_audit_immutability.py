@@ -15,6 +15,18 @@ import asyncpg
 import pytest
 import uuid6
 
+# Fail fast on a network hang. asyncpg.connect does NOT read PGCONNECT_TIMEOUT
+# (that is a libpq/psycopg2 variable), so the timeout must be passed explicitly.
+# Without this, an unreachable host (e.g. an IPv6-only endpoint on an IPv4
+# network) hangs ~60s per connection on asyncpg's default instead of 10s.
+_CONNECT_TIMEOUT_S = 10
+
+
+async def _connect(dsn: str) -> asyncpg.Connection:
+    return await asyncpg.connect(
+        dsn, statement_cache_size=0, timeout=_CONNECT_TIMEOUT_S
+    )
+
 
 async def _insert_audit_row(conn: asyncpg.Connection) -> UUID:
     row_id = uuid6.uuid7()
@@ -31,8 +43,28 @@ async def _insert_audit_row(conn: asyncpg.Connection) -> UUID:
     return row_id
 
 
+async def test_connection_role_is_pdpl_app(app_database_url):
+    """Guard the whole file: prove the rejections below are pdpl_app's OWN
+    grants, not an artifact of pooler-level role rewriting.
+
+    Supavisor (the Supabase pooler) uses the role embedded in the username
+    (``pdpl_app.<project_ref>``) as the real Postgres role, so current_user
+    and session_user must both resolve to ``pdpl_app``. If a pooler ever
+    rewrote the effective role to something more privileged, the privilege
+    tests in this file would be silently testing the wrong role — this
+    catches that before the privilege assertions run.
+    """
+    conn = await _connect(app_database_url)
+    try:
+        row = await conn.fetchrow("SELECT current_user, session_user")
+        assert row["current_user"] == "pdpl_app", row["current_user"]
+        assert row["session_user"] == "pdpl_app", row["session_user"]
+    finally:
+        await conn.close()
+
+
 async def test_pdpl_app_can_insert_audit_row(app_database_url):
-    conn = await asyncpg.connect(app_database_url, statement_cache_size=0)
+    conn = await _connect(app_database_url)
     try:
         row_id = await _insert_audit_row(conn)
         landed = await conn.fetchrow(
@@ -44,7 +76,7 @@ async def test_pdpl_app_can_insert_audit_row(app_database_url):
 
 
 async def test_pdpl_app_cannot_update_audit_row(app_database_url):
-    conn = await asyncpg.connect(app_database_url, statement_cache_size=0)
+    conn = await _connect(app_database_url)
     try:
         row_id = await _insert_audit_row(conn)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -57,7 +89,7 @@ async def test_pdpl_app_cannot_update_audit_row(app_database_url):
 
 
 async def test_pdpl_app_cannot_delete_audit_row(app_database_url):
-    conn = await asyncpg.connect(app_database_url, statement_cache_size=0)
+    conn = await _connect(app_database_url)
     try:
         row_id = await _insert_audit_row(conn)
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -73,7 +105,7 @@ async def test_pdpl_app_cannot_truncate_audit_log(app_database_url):
     trigger from ADR-0003 fails the statement. Today both guards apply:
     pdpl_app has REVOKE TRUNCATE, *and* the trigger would error anyway.
     """
-    conn = await asyncpg.connect(app_database_url, statement_cache_size=0)
+    conn = await _connect(app_database_url)
     try:
         with pytest.raises(
             (asyncpg.InsufficientPrivilegeError, asyncpg.RaiseError)
@@ -84,7 +116,7 @@ async def test_pdpl_app_cannot_truncate_audit_log(app_database_url):
 
 
 async def test_pdpl_app_can_select_audit_log(app_database_url):
-    conn = await asyncpg.connect(app_database_url, statement_cache_size=0)
+    conn = await _connect(app_database_url)
     try:
         rows = await conn.fetch(
             "SELECT id FROM audit_log ORDER BY created_at DESC LIMIT 1"
