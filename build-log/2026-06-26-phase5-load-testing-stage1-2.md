@@ -33,7 +33,7 @@ Both conditions required; committed in ADR-0014 §4 before any run.
    readiness ceiling ~2000 req/s, checks ~1230 req/s, both zero errors, p95 climbs linearly while
    throughput plateaus. (An earlier "readiness has zero pool-wait" claim was **corrected by direct
    `pg_stat_activity` measurement** — the read path saturates the 15 connections too.)
-2. **Pool-size sweep {5,10,15,25} @ VU=30 → both FLAT** (5× pool buys <12%): the single-worker **event
+2. **Pool-size sweep {5,10,15,25} @ VU=30 → both FLAT** (5× pool buys ~12% read / ~6.3% write): the single-worker **event
    loop / CPU** is the binding constraint on loopback, not the pool. Using the pool ≠ being limited by
    it; the sweep is what separates them.
 3. **Hold-time probe (50 ms async hold) → throughput TRACKS pool size linearly (POOL-bound).** Same
@@ -57,6 +57,18 @@ before the data; the data now points at it).
 - `zsh` does not word-split unquoted vars (a sweep loop ran once with the whole VU list); and
   `set -a && source .env.load` truncates `LOAD_DB_ADMIN_DSN` at its first space — `reset_db.py` now
   loads `.env.load` itself to be immune.
+- A guard check cannot gate the action it shares a shell block with: a `grep` for residual `<…%` bounds
+  ran immediately before `git commit` in the same block, flagged a leftover, and the commit ran anyway
+  (fixed by amend). Same enforce-by-mechanism discipline as the rest of the project — a check must be
+  able to STOP the step, not merely print before it.
+
+## Lessons
+
+- **توقّعت، قِست، صحّحت — مرّتين.** دخلت الجلسة بفرضية واضحة: مسار الكتابة (checks) pool-bound، لأن الـ transaction الطويل يحجز الـ connection فيشبع الـ pool عند 15 قبل القراءة. القياس المباشر قلب الفرضية مرّتين: أولاً صحّحت ادّعاء "readiness صفر pool-wait" بعد ما قست pg_stat_activity فعلياً (طلع conn=15 يشبع على القراءة أيضاً)؛ ثانياً قلب الـ pool sweep الفرضية الأساسية كلها — كلا المسارين event-loop-bound، لا pool-bound. الدرس مو النتيجة، بل أن القياس المباشر غيّر فهمي مرّتين، والتمسّك بالفرضية بلا قياس كان بيوصّلني لتحسين خاطئ (تكبير pool ما ينفع).
+
+- **الأداة تخدع، المورد لا.** منحنى k6 وحده يخدعك: شكل صعود الـ latency واستقرار الـ throughput متطابق تماماً سواء الاختناق في الـ CPU/event-loop أو في الـ pool. التوقيع واحد، المورد مختلف. الفيصل الوحيد هو القياس المباشر للمورد — pg_stat_activity للاتصالات الحيّة، وpool checkout-wait. الرسمة تقول "انكسر"؛ المورد وحده يقول "أيّ مورد". أي استنتاج عن عنق الزجاجة من k6 وحده، بلا قياس المورد، تخمين.
+
+- **وهم الـ loopback.** بيئة localhost مخادعة: زمن حجز الـ connection فيها ~1ms، فالـ pool=15 فائض بكثير ويختفي اختناقه الحقيقي. في الإنتاج (DB عبر الشبكة، RTT ~80-120ms) يتضخّم زمن الحجز ~100×، وعندها فقط يصير الـ pool هو القيد المُلزِم. أثبتّها بالـ probe (async sleep محقون يحاكي ظرف الشبكة): هناك تتبّع الـ throughput حجم الـ pool خطّياً — pool-bound. ما تختبره على loopback ليس ما تشغّله في الإنتاج، وزمن حجز الـ connection هو المتغيّر الذي يقلب الصورة بينهما — وهو بالضبط لماذا تحسين §7 هو تقليل hold-time، لا تكبير pool (الإنتاج مسقوف 15 أصلاً).
 
 ## Status
 

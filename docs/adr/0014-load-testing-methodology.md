@@ -142,7 +142,7 @@ Holding load fixed above saturation (VU=30) and varying `pool_size` ∈ {5,10,15
 | 15 | 2116 | 1274 |
 | 25 | 2132 | 1301 |
 
-**Both FLAT** — a 5× larger pool buys <12% (read) / <6% (write). Using all 15 connections and being *limited* by them are different things, and the sweep separates them: on loopback the single uvicorn **event loop / CPU** is the binding constraint, not the pool. The read/write gap (~1.6×) is per-request CPU cost on that one loop (the write does more work per request), independent of connection count.
+**Both FLAT** — a 5× larger pool buys ~12% (read, 1904→2132) / ~6.3% (write, 1224→1301). Using all 15 connections and being *limited* by them are different things, and the sweep separates them: on loopback the single uvicorn **event loop / CPU** is the binding constraint, not the pool. The read/write gap (~1.6×) is per-request CPU cost on that one loop (the write does more work per request), independent of connection count.
 
 ### 3. A hold-time probe flips the binding resource — the causal proof
 
