@@ -39,3 +39,8 @@ htmlcov/
 
 # Logs
 *.log
+
+# Phase-5 load testing — per-run seed output (not source)
+load/seed/tenant_ids.json
+# ...but DO track the load env: loopback-only, no real secret (ADR-0014 §2).
+!load/.env.load
