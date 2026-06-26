@@ -27,6 +27,15 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 def _build_engine() -> AsyncEngine:
     settings = get_settings()
     url = settings.app_database_url.get_secret_value()
+    # Pool sizing is OPT-IN (ADR-0014 §5): only pass pool_size / max_overflow
+    # when explicitly set, so when they are unset (production, always) SQLAlchemy
+    # applies its own defaults (5 + 10 = 15) — byte-for-byte the prior behaviour.
+    # They are set via env ONLY for the Phase-5 load-test pool-size sweep.
+    pool_kwargs: dict[str, int] = {}
+    if settings.db_pool_size is not None:
+        pool_kwargs["pool_size"] = settings.db_pool_size
+    if settings.db_max_overflow is not None:
+        pool_kwargs["max_overflow"] = settings.db_max_overflow
     # Supavisor's transaction-mode pool does NOT support prepared statements.
     # SQLAlchemy + asyncpg will eagerly prepare statements unless we disable
     # both caches. Harmless on a direct connection; required on the pool.
@@ -38,6 +47,7 @@ def _build_engine() -> AsyncEngine:
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
         },
+        **pool_kwargs,
     )
 
 

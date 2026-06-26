@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     # Runtime DB URL — as pdpl_app, NOT as postgres. See ADR-0004 §5.
     app_database_url: SecretStr = Field(..., alias="APP_DATABASE_URL")
 
+    # Connection-pool sizing (ADR-0014 §5). BOTH default to None, which means
+    # "do not pass the kwarg to create_async_engine" — so SQLAlchemy's own
+    # defaults apply (pool_size=5 + max_overflow=10 = 15). Production NEVER sets
+    # these: unset is byte-for-byte the prior behaviour. They exist ONLY for the
+    # Phase-5 load-test pool-size sweep (the causal-isolation diagnostic), set
+    # via env for that run alone — never the headline config.
+    db_pool_size: int | None = Field(None, alias="DB_POOL_SIZE")
+    db_max_overflow: int | None = Field(None, alias="DB_MAX_OVERFLOW")
+
     # Logging.
     log_level: str = Field("INFO", alias="LOG_LEVEL")
 
