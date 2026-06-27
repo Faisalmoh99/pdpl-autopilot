@@ -82,9 +82,9 @@ def _compute_prompt_surface_hash() -> str:
 # PROMPT_VERSION (not hand-written). When the prompt surface legitimately
 # changes, bump PROMPT_VERSION and update BOTH constants below in the same edit
 # — and re-run the eval (see the failure message).
-_PINNED_PROMPT_VERSION = "gap-ar-v1"
+_PINNED_PROMPT_VERSION = "gap-ar-v2"
 _PINNED_SURFACE_HASH = (
-    "3ffc37f77ed493a185ff1617f47bc6f43e9f20af38082dfa6296ca8f3c5a1d9e"
+    "7b85c45b007f5e91c7a32aac87bd3940e4351e6e415512b966f5f0d6dfed08bc"
 )
 
 

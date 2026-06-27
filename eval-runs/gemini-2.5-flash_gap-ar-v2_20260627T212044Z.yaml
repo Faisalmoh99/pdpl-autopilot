@@ -1,0 +1,425 @@
+run_id: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
+model: gemini-2.5-flash
+prompt_version: gap-ar-v2
+temperature: 0.0
+note: Single non-deterministic sample — a POINT ESTIMATE, not a stable baseline. Re-running may shift
+  the numbers even at temperature 0.
+rating_instructions: 'Rate each case 1-5 in `rating` (right gap, sensible fix, clear Arabic), then copy
+  into golden_set.yaml as `quality_score` with `quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z`.'
+metrics:
+  n_cases: 14
+  gate_pass_rate: 0.9286
+  must_expectations_rate: 0.7143
+  per_check_rates:
+    no_compliance_assertion_rate: 1.0
+    references_control_rate: 1.0
+    arabic_rate: 1.0
+    within_length_bounds_rate: 0.9286
+cases:
+- id: privacy-notice-non_compliant
+  control_code: PDPL-ART12-PRIVACY-NOTICE
+  status: non_compliant
+  quality_criteria: 'عربي واضح غير تقني؛ خطوة علاجية واحدة: نشر إشعار خصوصية يغطّي الأغراض والمستلمين
+    ومدد الاحتفاظ والحقوق؛ بلا وعود مطلقة أو ضمان امتثال.'
+  output: 'البند: إفصاح إشعار الخصوصية لأصحاب البيانات
+
+
+    الشرح:
+
+    هذا البند يمثل فجوة لأن جهة التحكم لم تستوفِ متطلبات إفصاح إشعار الخصوصية لأصحاب البيانات قبل جمع
+    بياناتهم الشخصية. هذا يعني أن أصحاب البيانات قد لا يكونون على دراية كاملة بأغراض معالجة بياناتهم،
+    أو الجهات التي ستستلمها، أو المدة التي سيتم الاحتفاظ بها، أو حقوقهم وكيفية ممارستها، وهو ما يتطلبه
+    النظام.
+
+
+    الخطوة العلاجية:
+
+    يجب على جهة التحكم إعداد ونشر إشعار خصوصية واضح وسهل الوصول إليه قبل جمع أي بيانات شخصية. يجب أن يتضمن
+    هذا الإشعار تفاصيل حول أغراض معالجة البيانات، وفئات البيانات التي سيتم جمعها، والجهات المستلمة للبيانات
+    أو فئاتها، ومدد الاحتفاظ بالبيانات، وحقوق صاحب البيانات وكيفية ممارستها، وذلك التزاماً بمتطلبات إفصاح
+    إشعار الخصوصية لأصحاب البيانات.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: privacy-notice-partial
+  control_code: PDPL-ART12-PRIVACY-NOTICE
+  status: partial
+  quality_criteria: 'خطوة واحدة: إضافة الجهات المستلمة وحقوق صاحب البيانات للإشعار؛ لا يدّعي نقص الأغراض
+    (مُحقَّقة)؛ بلا مبالغة.'
+  output: 'شرح الفجوة:
+
+    إشعار الخصوصية الحالي لا يوضح بشكل كامل من هي الجهات التي ستستلم البيانات الشخصية التي تجمعها، أو
+    على الأقل فئات هذه الجهات. كما أنه لا يشرح بوضوح حقوق أصحاب البيانات، مثل حقهم في الوصول إلى بياناتهم
+    أو طلب تصحيحها، ولا يوضح لهم كيفية ممارسة هذه الحقوق. هذا يعني أن أصحاب البيانات قد لا يكونون على
+    دراية كاملة بمن سيشارك بياناتهم معهم، أو كيف يمكنهم التحكم في بياناتهم.
+
+
+    الخطوة العلاجية:
+
+    قم بتحديث إشعار الخصوصية الخاص بك ليشمل قائمة بالجهات المستلمة للبيانات أو فئاتها، بالإضافة إلى شرح
+    واضح ومفصل لحقوق أصحاب البيانات وكيفية ممارستها، وذلك التزاماً بمتطلبات إفصاح إشعار الخصوصية لأصحاب
+    البيانات.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: privacy-notice-not_assessed
+  control_code: PDPL-ART12-PRIVACY-NOTICE
+  status: not_assessed
+  quality_criteria: يوضّح بأمانة أن البند لم يُقيَّم آلياً لعدم اكتمال الإجابات ويحتاج مراجعة يدوية؛ بلا
+    اختلاق ثغرة أو حكم.
+  output: 'البند: إفصاح إشعار الخصوصية لأصحاب البيانات
+
+
+    الحالة: لم يُقيَّم آلياً (يحتاج مراجعة)
+
+
+    الشرح:
+
+    هذا البند يتطلب من جهة التحكم أن توضح لأصحاب البيانات، قبل جمع بياناتهم، لماذا تجمع هذه البيانات (أغراض
+    المعالجة)، وما هي أنواع البيانات التي تجمعها، ومن هم الأشخاص أو الجهات التي ستستلم هذه البيانات، وكم
+    المدة التي ستحتفظ بها، وما هي حقوق أصحاب البيانات وكيف يمكنهم ممارستها. بما أن هذا البند لم يُقيَّم
+    آلياً، فإنه يحتاج إلى مراجعة يدوية للتأكد من أن إشعار الخصوصية الحالي يغطي كل هذه النقاط بوضوح وسهولة.
+
+
+    الخطوة العلاجية:
+
+    راجع إشعار الخصوصية الحالي لديك وتأكد من أنه يوضح بوضوح أغراض معالجة البيانات الشخصية، ويحدد الجهات
+    المستلمة للبيانات أو فئاتها، ويبين حقوق صاحب البيانات وكيفية ممارستها، وذلك قبل عملية جمع البيانات.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: dsr-access-non_compliant
+  control_code: PDPL-ART4-DSR-ACCESS
+  status: non_compliant
+  quality_criteria: 'خطوة واحدة: إنشاء آلية لاستقبال طلبات الوصول وتحديد مهلة للرد؛ بلا ضمان.'
+  output: 'شرح فجوة الامتثال:
+
+    هذا البند يمثل فجوة لأن نظام حماية البيانات الشخصية (PDPL) يمنح أصحاب البيانات الحق في الوصول إلى
+    بياناتهم الشخصية لديك. حالياً، لا يوجد لديك إجراء موثّق يوضح كيفية التعامل مع هذه الطلبات، ولا توجد
+    مدة زمنية محددة للاستجابة لها. هذا يعني أنك قد لا تتمكن من تلبية التزامك بتوفير حق الوصول إلى البيانات
+    الشخصية لأصحابها بشكل فعال ومنظم.
+
+
+    خطوة علاجية:
+
+    قم بإنشاء وتوثيق إجراء واضح ومفصل يحدد كيفية استقبال طلبات أصحاب البيانات للوصول إلى بياناتهم الشخصية،
+    وكيفية التحقق من هويتهم، والخطوات المتبعة لمعالجة الطلب، وتحديد مدة زمنية معقولة ومحددة للاستجابة
+    لهذه الطلبات.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing:
+  - آلية
+  - الإطار الزمني
+  must_not_contain_present: []
+  must_expectations_passed: false
+  rating: null
+- id: dsr-access-partial
+  control_code: PDPL-ART4-DSR-ACCESS
+  status: partial
+  quality_criteria: 'خطوة واحدة: تحديد إطار زمني نظامي للرد؛ لا يدّعي غياب الآلية (موجودة).'
+  output: 'شرح الفجوة:
+
+    النظام يمنح أصحاب البيانات الشخصية الحق في الوصول إلى بياناتهم، وهذا يشمل معرفة فئات البيانات التي
+    تحتفظ بها، ولماذا تتم معالجتها، ومن هي الجهات التي تستقبل هذه البيانات. الفجوة هنا هي أنك لم تحدد
+    بعد كيف ستستجيب لهذه الطلبات خلال مدة زمنية واضحة ومحددة، وهذا يعني أنك قد لا تتمكن من تلبية التزامك
+    بـ "حق الوصول إلى البيانات الشخصية" بشكل كامل.
+
+
+    الخطوة العلاجية:
+
+    حدد مدة زمنية واضحة ومحددة للاستجابة لطلبات الوصول إلى البيانات الشخصية، وقم بتوثيق هذه المدة في سياساتك
+    الداخلية.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing:
+  - الإطار الزمني
+  - الرد
+  must_not_contain_present: []
+  must_expectations_passed: false
+  rating: null
+- id: dsr-access-not_assessed
+  control_code: PDPL-ART4-DSR-ACCESS
+  status: not_assessed
+  quality_criteria: 'يوضّح بأمانة أن جانب مهلة الرد لم يُقيَّم لعدم الإجابة؛ خطوة واحدة: استكمال المعلومة
+    أو مراجعة يدوية.'
+  output: 'البند: حق الوصول إلى البيانات الشخصية
+
+
+    الحالة: لم يُقيَّم آلياً (يحتاج مراجعة)
+
+
+    شرح الفجوة:
+
+    هذا البند يتطلب من جهة التحكم (شركتك) أن تتيح للأفراد إمكانية الوصول إلى بياناتهم الشخصية التي تحتفظ
+    بها، وأن توضح لهم فئات هذه البيانات وأغراض معالجتها والجهات التي تستقبلها. بما أن هذا البند لم يُقيَّم
+    آلياً، فإنه يحتاج إلى مراجعة يدوية للتأكد من وجود آلية واضحة وفعالة للاستجابة لطلبات الوصول هذه.
+
+
+    خطوة علاجية:
+
+    راجع الإجراءات الحالية لشركتك للتأكد من وجود سياسة واضحة ومحددة للاستجابة لطلبات الأفراد للوصول إلى
+    بياناتهم الشخصية، مع تحديد المدة الزمنية للاستجابة، وذلك التزاماً بحق الوصول إلى البيانات الشخصية.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: breach-72h-non_compliant
+  control_code: PDPL-ART20-BREACH-NOTIFY-72H
+  status: non_compliant
+  quality_criteria: 'خطوة واحدة: إعداد مسودة إبلاغ جاهزة وآلية إخطار خلال 72 ساعة؛ بلا مبالغة.'
+  output: 'شرح الفجوة:
+
+    هذا البند يمثل فجوة لأنك لا تملك إجراءً موثقًا يوضح كيفية التعامل مع تسرب البيانات الشخصية. هذا يعني
+    أنه في حال حدوث تسرب، قد لا تكون هناك خطة واضحة لإبلاغ الجهة المختصة وأصحاب البيانات المتأثرين بالسرعة
+    المطلوبة، مما قد يؤدي إلى تأخير في الاستجابة. يلتزم البند بإشعار تسرب البيانات الشخصية خلال 72 ساعة.
+
+
+    الخطوة العلاجية:
+
+    قم بإنشاء وتوثيق إجراء واضح ومفصل للاستجابة لتسرب البيانات الشخصية، يتضمن خطوات محددة لإبلاغ الجهة
+    المختصة خلال 72 ساعة من العلم بالحادثة، وإبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing:
+  - الإبلاغ
+  must_not_contain_present: []
+  must_expectations_passed: false
+  rating: null
+- id: breach-72h-partial
+  control_code: PDPL-ART20-BREACH-NOTIFY-72H
+  status: partial
+  quality_criteria: 'خطوة واحدة: ضبط الإخطار ليلتزم بمهلة 72 ساعة؛ لا يدّعي غياب الإجراء.'
+  output: 'هذا البند يمثل فجوة لأن الإجراءات الحالية لا تضمن إبلاغ الجهة المختصة خلال 72 ساعة من علمك
+    بحدوث تسرب للبيانات الشخصية. هذا يعني أن هناك احتمال ألا يتم الإبلاغ في الوقت المحدد الذي يفرضه النظام،
+    مما قد يعرض عملك للمساءلة.
+
+
+    الخطوة العلاجية: قم بوضع إجراء مكتوب وواضح يحدد المسؤول عن إبلاغ الجهة المختصة في حال حدوث تسرب للبيانات،
+    ويضمن أن يتم هذا الإبلاغ خلال 72 ساعة من اكتشاف التسرب، وذلك التزاماً بالبند الذي ينص على "إبلاغ الجهة
+    المختصة خلال 72 ساعة من علمها بالحادثة".'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: breach-72h-not_assessed
+  control_code: PDPL-ART20-BREACH-NOTIFY-72H
+  status: not_assessed
+  quality_criteria: 'أمانة: جانب الـ72 ساعة لم يُقيَّم؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية.'
+  output: 'هذا البند يتطلب من جهة التحكم إبلاغ الجهة المختصة خلال 72 ساعة من علمها بأي تسرب للبيانات الشخصية
+    قد يضر بأصحابها، بالإضافة إلى إبلاغ أصحاب البيانات المتأثرين دون تأخير غير مبرر. بما أن هذا البند
+    لم يُقيَّم آلياً، فإنه يحتاج إلى مراجعة يدوية للتأكد من وجود إجراءات واضحة وفعالة للتعامل مع حوادث
+    تسرب البيانات.
+
+
+    الخطوة العلاجية: قم بوضع خطة استجابة لحوادث تسرب البيانات تتضمن تحديد المسؤوليات والإجراءات اللازمة
+    لإبلاغ الجهة المختصة خلال 72 ساعة وإبلاغ أصحاب البيانات المتأثرين، وذلك لضمان الالتزام بإشعار تسرب
+    البيانات الشخصية خلال 72 ساعة.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: ropa-non_compliant
+  control_code: PDPL-ART31-ROPA
+  status: non_compliant
+  quality_criteria: 'خطوة واحدة: إنشاء سجل أنشطة معالجة يوثّق الأغراض والفئات والمستلمين ومدد الاحتفاظ؛
+    بلا مبالغة.'
+  output: 'الشرح:
+
+    هذا البند يمثل فجوة لأنك لا تحتفظ بسجل لعمليات معالجة البيانات الشخصية. النظام يطلب من جهة التحكم،
+    وهي أنت في هذه الحالة، أن يكون لديها سجل يوضح كيف تعالج البيانات الشخصية، بما في ذلك الأغراض التي
+    تجمع البيانات من أجلها، ومن هم أصحاب هذه البيانات، وما هي أنواع البيانات التي تجمعها، ومن هي الجهات
+    التي تستلم هذه البيانات، وكم المدة التي تحتفظ بها، وما هي الإجراءات الأمنية التي تتخذها لحمايتها.
+    عدم وجود هذا السجل يعني أنك لا تلتزم بمتطلبات النظام المتعلقة بمسك سجل عمليات معالجة البيانات الشخصية.
+
+
+    الخطوة العلاجية:
+
+    قم بإنشاء سجل لعمليات معالجة البيانات الشخصية لديك، وتأكد من تضمين جميع المعلومات المطلوبة مثل الأغراض
+    وفئات أصحاب البيانات وفئات البيانات والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وذلك للامتثال
+    لمتطلب "مسك سجل عمليات معالجة البيانات الشخصية شاملاً الأغراض وفئات أصحاب البيانات وفئات البيانات
+    والجهات المستلمة ومدد الاحتفاظ والتدابير الأمنية، وإتاحته للجهة المختصة عند الطلب".'
+  error: null
+  gate_passed: false
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: false
+  must_contain_missing:
+  - أنشطة المعالجة
+  must_not_contain_present: []
+  must_expectations_passed: false
+  rating: null
+- id: ropa-not_assessed
+  control_code: PDPL-ART31-ROPA
+  status: not_assessed
+  quality_criteria: 'أمانة: لم يُقيَّم لعدم تقديم ما يكفي؛ خطوة واحدة: تجهيز السجل الداخلي للمراجعة اليدوية.'
+  output: 'هذا البند لم يتم تقييمه آلياً، مما يعني أنه يحتاج إلى مراجعة يدوية للتأكد من الامتثال. الفجوة
+    المحتملة هنا هي عدم وجود سجل مكتمل لعمليات معالجة البيانات الشخصية، أو أن السجل الموجود لا يشمل جميع
+    التفاصيل المطلوبة مثل الأغراض وفئات أصحاب البيانات والجهات المستلمة. هذا السجل مهم لأنه يوضح كيفية
+    تعاملك مع البيانات الشخصية ويجب أن يكون متاحاً للجهة المختصة عند الطلب.
+
+
+    الخطوة العلاجية: قم بإنشاء أو تحديث سجل لعمليات معالجة البيانات الشخصية لديك، وتأكد من أنه يشمل جميع
+    المتطلبات المذكورة في البند، وهي: الأغراض، فئات أصحاب البيانات، فئات البيانات، الجهات المستلمة، مدد
+    الاحتفاظ، والتدابير الأمنية.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: security-measures-not_assessed
+  control_code: PDPL-ART19-SECURITY-MEASURES
+  status: not_assessed
+  quality_criteria: يربط بعنوان الضابط فقط، يوضّح عدم التقييم والحاجة لمراجعة يدوية؛ بلا اختلاق أي ثغرة
+    أمنية محدّدة.
+  output: 'البند: التدابير الفنية والتنظيمية لحماية البيانات
+
+
+    الشرح:
+
+    هذا البند يتطلب من جهة التحكم، وهي أنت كصاحب عمل، أن تتخذ إجراءات مناسبة لحماية البيانات الشخصية التي
+    تتعامل معها. هذه الإجراءات يجب أن تكون فنية (مثل استخدام برامج حماية) وتنظيمية (مثل وضع سياسات داخلية)
+    لضمان عدم وصول أي شخص غير مصرح له للبيانات، أو الكشف عنها، أو فقدانها، أو تغييرها، أو إتلافها. بما
+    أن هذا البند لم يُقيَّم آلياً، فإنه يحتاج إلى مراجعة يدوية للتأكد من أنك قد اتخذت هذه التدابير بالفعل.
+
+
+    الخطوة العلاجية:
+
+    راجع جميع الإجراءات الحالية التي تتخذها لحماية البيانات الشخصية في عملك، سواء كانت تقنية (مثل برامج
+    الحماية، كلمات المرور القوية) أو إدارية (مثل سياسات الوصول للبيانات، تدريب الموظفين)، وقارنها بمتطلبات
+    البند للتأكد من أنها كافية ومناسبة لمستوى المخاطر المحتملة.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: lawful-basis-not_assessed
+  control_code: PDPL-ART5-LAWFUL-BASIS
+  status: not_assessed
+  quality_criteria: يربط بالعنوان، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة مثل (تجمع بيانات
+    بدون أساس)؛ حياد تام.
+  output: 'البند: الأساس النظامي لمعالجة البيانات الشخصية
+
+
+    الشرح: هذا البند يتطلب أن تكون معالجة البيانات الشخصية مبنية على أساس نظامي واضح ومحدد، مثل الحصول
+    على موافقة صريحة من صاحب البيانات، أو أن تكون المعالجة ضرورية لتنفيذ عقد بينك وبين صاحب البيانات،
+    أو أن تكون ملزماً بها بموجب نظام آخر. بما أن هذا البند لم يُقيَّم آلياً، فإنه يحتاج إلى مراجعة للتأكد
+    من أن جميع عمليات معالجة البيانات الشخصية لديك تستند إلى أحد هذه الأسس النظامية المذكورة في وصف البند.
+
+
+    الخطوة العلاجية: قم بمراجعة جميع الأنشطة التي تقوم فيها بمعالجة البيانات الشخصية، وتأكد من أن كل نشاط
+    له أساس نظامي واضح وموثق، سواء كان موافقة صريحة، أو ضرورة لتنفيذ عقد، أو التزاماً بنص نظامي.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
+- id: cross-border-not_assessed
+  control_code: PDPL-ART29-CROSS-BORDER
+  status: not_assessed
+  quality_criteria: يربط بعنوان النقل خارج المملكة، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة
+    نقل.
+  output: 'البند: نقل البيانات الشخصية خارج المملكة
+
+
+    الشرح:
+
+    هذا البند لم يُقيَّم آلياً، مما يعني أنه يحتاج إلى مراجعة بشرية للتأكد من وجود أساس نظامي مناسب وضمانات
+    كافية لنقل البيانات الشخصية خارج المملكة، وفقاً للضوابط التي تحددها الجهة المختصة. عدم وجود تقييم
+    آلي لا يعني بالضرورة وجود فجوة، بل يشير إلى أن الحالة غير محسومة وقد تكون مستوفاة بالفعل.
+
+
+    الخطوة العلاجية:
+
+    راجع جميع عمليات نقل البيانات الشخصية خارج المملكة للتأكد من وجود أساس نظامي واضح وضمانات كافية، وتوثيق
+    هذه العمليات والأسس والضمانات بشكل مفصل.'
+  error: null
+  gate_passed: true
+  checks:
+    no_compliance_assertion: true
+    references_control: true
+    arabic: true
+    within_length_bounds: true
+  must_contain_missing: []
+  must_not_contain_present: []
+  must_expectations_passed: true
+  rating: null
