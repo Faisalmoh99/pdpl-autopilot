@@ -161,6 +161,48 @@ Throughput **TRACKS pool size linearly** (5× pool → 5.0× throughput) — **P
 
 Loopback deliberately removes the network, which is *why* the deterministic paths land in the event-loop-bound regime here (per-request hold-time ≈ ms). In production the DB is networked (~80–120 ms RTT), so real hold-time sits in the **probe's regime** — and the 15-connection Nano pool becomes the binding constraint, exactly as the probe shows. Therefore **§7 stands and is now evidence-backed**: the production optimization is to **reduce connection hold-time, not grow the pool**, and the concrete instance is the explanation path's Gemini call held inside `session_scope` (move it out — read/release, call holding no connection, short new txn for the `put`). The deterministic write path's hold-time fix is real but would show no loopback gain (it is event-loop-bound here); its payoff is in the networked regime. Raising the deterministic ceiling on *this* setup would instead need more workers — bounded in production by the shared 15-connection server-side cap (the genuine tension).
 
+## Findings — Stage 3 (execution — 2026-06-27): the §7 fix on the REAL explanation path
+
+Stage 3 closes Phase 5: it reproduces the probe's pool-bound finding on the **real** explanation orchestration (cache + gate + put), applies the §7 hold-time fix, and measures the before/after. The probe (Findings §3) proved *abstractly* that a long hold-time makes the pool the binding resource (a bare `asyncio.sleep` across a held connection); stage 3 proves it on the real path and fixes it.
+
+### 5. The explanation load shape — the probe's shape on the real path
+
+A load-only app (`load/explain_app.py`, never on main's serving path, the same discipline as `probe_app.py`) drives the **real** `explain_tenant_gap` orchestration — tenant read → re-derive `ControlDecision` → `build_gap_context` → `explain_gap` (get → MISS → call → GATE → put) — with two load-only substitutions, both isolated in `load/` so main's behaviour is byte-for-byte unchanged:
+
+- **A `LatencyStubExplainer`** that `await asyncio.sleep(0.05)` then returns a known-good Arabic explanation — the I/O shape of a slow Gemini call (connection-relevant time awaited, event loop free), **never** the real API (§3). This is the probe's `asyncio.sleep`, but now holding the connection across the **real** orchestration, not a bare query.
+- **A fresh `uuid4().hex` `prompt_version` per request**, forcing a cache **MISS** every time (the documented test seam on `explain_tenant_gap`). Without it, once the ~20 seeded gaps are cached every request is a HIT that holds no connection across the call — the hold-time shape under study would vanish and before/after would both flatten. Forcing a miss isolates the MISS path (the only shape §7 changes), exactly as the probe holds on every request. The fresh key lives ONLY in the load app; `api/explanations.py` keeps the governed `PROMPT_VERSION` (ADR-0013) unchanged.
+
+Before the sweep, `load/check_gate.py` proves the stub text **passes the gate** under the seeded tenant's real `GapContext` (all four checks PASS) — so every request exercises the FULL miss path (call → gate PASS → put), not call-only.
+
+### 6. BEFORE / AFTER — the A/B freeze and the headline
+
+**The A/B freeze:** the entire harness (`explain_app.py` + stub text + `k6/explanations.js` + the `explain` mode in `pool_sweep.py`) was built and the BEFORE sweep run *first*. Then ONLY `src/` changed (the refactor below). The AFTER sweep ran on the **byte-identical** harness — so the only variable between the two numbers is the `session_scope` connection lifecycle. Same VU=30 pool sweep {5,10,15,25}, `max_overflow=0`, reset+reseed per pool, max of 2 runs:
+
+| pool_size | BEFORE req/s (call **inside** scope) | AFTER req/s (call **outside** scope) |
+|---:|---:|---:|
+| 5  | 79  | 501 |
+| 10 | 146 | 471 |
+| 15 | **218** | **435** |
+| 25 | 362 | 378 |
+| **sweep response** | **TRACKS pool (4.6× across 5→25) → POOL-BOUND** | **does NOT track pool — DECLINES 501→378 → event-loop-BOUND** |
+
+BEFORE reproduces the probe almost exactly (probe@15 = 223 req/s, explanation@15 = 218) — the abstract finding, now on the real path: throughput tracks pool size linearly, `conn_peak == pool_size`, p95 falls as the pool grows. AFTER, throughput does **not** track pool size — it **DECLINES** (501→378 req/s, a ~25% drop) as the pool grows. That decline is *stronger* evidence than a flat line: it shows the extra connections add pure **overhead** on the single event loop, not throughput — so the pool is not merely non-binding, it is **removed as the binding constraint** (the event-loop-bound regime shared with readiness/checks). The decline is genuine, not an ordering/warm-up artefact: the sweep does a full reset+reseed and a fresh, warmed app process before **each** pool level, so a larger pool starting from identical state still yields *less* throughput.
+
+**The headline is the constraint change, NOT the local speed-up.** On loopback the AFTER number is higher (218 → 435 at pool=15) only because the network is absent, so releasing the connection lets the 50 ms sleep run fully concurrently instead of serializing on 15 connections — a loopback artefact, the same illusion as Findings §4. The **transferable** result is that the explanation miss path moved out of the pool-bound regime: in production the networked ~100 ms Gemini hold-time puts the path squarely in the probe's regime, where the 15-connection Nano pool (which cannot be grown) *is* the binding constraint — and that is exactly what moving the call outside `session_scope` removes.
+
+### 7. The refactor — connection lifecycle changed, safety chokepoint NOT
+
+`explain_gap` no longer receives the caller's session; it owns its own **two short transactions** — one to read the cache, one for the verified `put` — with the external call **between** them holding no pooled connection. `explain_tenant_gap` closes its tenant-read transaction before constructing the explainer. Every ADR-0011 invariant is preserved, verified green after the refactor:
+
+- **Gate before put, put verified-only.** The gate still runs in-process immediately before `put`; the order did not move — splitting read and write into two transactions did not touch the chokepoint.
+- **Re-gate on the cache HIT.** The re-gate now runs on the hit text *after* the read transaction closes; it is pure (no DB), so releasing the connection first does not weaken it.
+- **The keystone holds on BOTH paths** (re-run explicitly, green): a fresh compliance-assertion is gate-rejected → fallback (`gate_rejected`), and a poisoned cache row is re-gated on HIT → rejected → fallback (`cache_regate_failed`). The poisoned text is never served; the optimization did not weaken the safety line.
+- **Seven `.importlinter` contracts stay green.** `pdpl.explanations` importing `pdpl.db.session.session_scope` is already permitted (Contract 7 explicitly allows `pdpl.db`); no boundary is crossed. Full suite: all explanation + architecture tests green (the only failures are the pre-existing `test_outbox_worker` env gap — `ConnectionRefusedError` against the local sandbox — which also fail on pristine `main`, unrelated to this change).
+
+### 8. Bounded gap accepted (documented, not fixed in stage 3)
+
+The two-transaction split slightly changes **put-failure semantics**: the old single transaction rolled back atomically if the `put` failed; the split now means a gate-*passed* explanation may not be cached if txn B fails after the call succeeded (the request still returns the verified text — only the cache write is lost, and the next request for the same gap simply regenerates and re-puts). **Safety is unaffected** — the served text is always gated, and `put` is `ON CONFLICT DO NOTHING` so a concurrent double-put was already a no-op (the race pre-existed the split, since each request always had its own session). The lost-write-on-txn-B-failure is a *cache-efficiency* edge, not a correctness or safety one. Out of scope to fix in stage 3; recorded here as a known bounded gap.
+
 ## Consequences
 
 **Positive**
@@ -178,6 +220,6 @@ Loopback deliberately removes the network, which is *why* the deterministic path
 - **Stub-backed explanation load does not exercise real model latency variance.** Deliberate: the cold-Gemini path is out of scope (cost + Google's rate limit). The injected-latency stub measures *our* hold-time behaviour, which is the part we can act on.
 - **The optimization is framed before the data.** Only the *principle* (hold-time, not pool) is fixed now; the concrete change waits for the knee, honoring "no optimization before the breaking-point data exists."
 
-## Open questions (deferred to Phase-3 explanation load)
+## Open questions — RESOLVED in Stage 3 (Findings §5–§8)
 
-- **How the stub explainer is injected without hitting Gemini.** The `POST /explanations` route hardcodes `gemini_explainer_from_settings` and does not expose an override. Leading candidate: add a `GEMINI_BASE_URL` setting and point it at a local fake-Gemini HTTP server returning a valid Arabic response (optionally with injected latency) — this preserves the **full** real orchestration path (cache + gate + put), cleaner than a load-only app factory. Resolved when Phase 3 begins.
+- **How the stub explainer is injected without hitting Gemini.** ~~Leading candidate: a `GEMINI_BASE_URL` fake-Gemini HTTP server.~~ **Resolved differently, and more cleanly:** a load-only app (`load/explain_app.py`) calls `explain_tenant_gap` with the `explainer=` seam it *already exposes* (the same seam the C4b tests use), injecting a `LatencyStubExplainer`. This preserves the **full** real orchestration (cache + gate + put) without standing up a fake HTTP server or adding a `GEMINI_BASE_URL` setting to production config — the injection stays entirely in `load/`, off main's serving path, mirroring `probe_app.py`. A per-request `uuid4().hex` `prompt_version` (also an existing test seam) forces the cache MISS that makes the hold-time shape observable.

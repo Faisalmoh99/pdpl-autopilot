@@ -4,22 +4,34 @@
 The sequence is the load-bearing safety seam of the feature:
 
     key  = compute_cache_key(...)
-    hit  = get(cache, key)
+    hit  = get(cache, key)                    # short txn A — connection released
     if hit:  RE-GATE(hit) -> pass: serve cache_hit ; fail: anomaly + fallback
-    miss:    explain -> GATE -> pass: put + serve ai_verified
+    miss:    explain -> GATE -> pass: put + serve ai_verified   # put = short txn B
                              -> fail/error: fallback (never put)
+
+CONNECTION HOLD-TIME (ADR-0014 §7): the external `explainer.explain` call runs
+holding NO pooled connection. The orchestrator owns its OWN short transactions —
+one to read the cache, one to write the verified `put` — and the slow model call
+sits BETWEEN them, with the connection released. This is the hold-time fix proven
+in ADR-0014: on a networked DB the connection-across-the-call shape made the
+15-connection pool the binding constraint; releasing it removes the pool as the
+constraint. The change is PURELY the connection lifecycle — the safety ordering
+below is untouched.
 
 Two invariants a reader must see by reading it:
 
   1. GATE BEFORE PUT, ALWAYS; PUT VERIFIED TEXT ONLY. The orchestrator is the
      writer, and verified-only is ITS contract — the cache enforces no safety
-     (ADR-0009 §6).
+     (ADR-0009 §6). The gate still runs in-process, immediately before the
+     verified-only `put`; splitting the read and write into two transactions did
+     not move the gate or the order.
   2. THE GATE IS THE SINGLE CHOKEPOINT every user-facing string passes through —
      fresh OR cached. Re-gating the cache read (refining ADR-0009 §6's read
      semantic) makes the safety property INDEPENDENT of trusting every write
      path: even a row injected by some other route is re-checked on read. The
      gate is deterministic and costs microseconds, so this is free relative to
-     the call it guards.
+     the call it guards. The re-gate runs on the hit text AFTER txn A closes — it
+     is pure (no DB), so releasing the connection first does not weaken it.
 
 A re-gate failure is an anomaly (`cache_regate_failed`): logged at error +
 counted as the standing signal, and replaced by the fallback for that read.
@@ -37,11 +49,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from pdpl.ai.explainer import Explainer, ExplainerError, GapContext
 from pdpl.ai.prompt import PROMPT_VERSION
 from pdpl.db.ai_explanations import compute_cache_key, get, put
+from pdpl.db.session import session_scope
 from pdpl.explanations.fallback import deterministic_fallback
 from pdpl.observability.logging import get_logger
 from pdpl.observability.metrics import counter
@@ -101,7 +112,6 @@ def _fallback(
 
 
 async def explain_gap(
-    session: AsyncSession,
     ctx: GapContext,
     explainer: Explainer,
     *,
@@ -111,8 +121,11 @@ async def explain_gap(
     """Produce a verified Arabic gap explanation — from cache, fresh from the
     model, or the deterministic floor — safe on EVERY result (ADR-0011 §2).
 
-    `session` is the caller's transaction (the C4b endpoint owns its scope);
-    `model` is the requested model id, part of the cache key.
+    Owns its OWN connection lifecycle (ADR-0014 §7): a short transaction to read
+    the cache, then the external `explainer.explain` call holding NO pooled
+    connection, then a short transaction solely for the verified `put`. The slow
+    model call therefore never pins a connection — the hold-time fix. `model` is
+    the requested model id, part of the cache key.
     """
     key = compute_cache_key(
         prompt_version=prompt_version,
@@ -123,8 +136,12 @@ async def explain_gap(
         lang=ctx.lang,
     )
 
-    hit = await get(session, key)
+    # Txn A: read the cache, then release the connection before anything slow.
+    async with session_scope() as session:
+        hit = await get(session, key)
     if hit is not None:
+        # Re-gate on the hit text — PURE (no DB), so it runs fine after txn A
+        # closed; the connection is not held across the safety check.
         passed, failed = _passes_gate(hit, ctx)
         if passed:
             counter("explanations.cache", result="hit")
@@ -143,6 +160,7 @@ async def explain_gap(
 
     counter("explanations.cache", result="miss")
 
+    # The external call holds NO pooled connection (the §7 hold-time fix).
     try:
         out = await explainer.explain(ctx)
     except ExplainerError as exc:
@@ -154,18 +172,22 @@ async def explain_gap(
         return _fallback(ctx, reason="explainer_error", failed_checks=[])
 
     candidate = out.text
+    # THE GATE — in-process, immediately before the verified-only put. The order
+    # (gate -> put) is unchanged by the two-transaction split.
     passed, failed = _passes_gate(candidate, ctx)
     if not passed:
         return _fallback(ctx, reason="gate_rejected", failed_checks=failed)
 
-    await put(
-        session,
-        key,
-        text=candidate,
-        lang=ctx.lang,
-        prompt_version=prompt_version,
-        model=model,
-    )
+    # Txn B: a short new transaction solely for the verified put.
+    async with session_scope() as session:
+        await put(
+            session,
+            key,
+            text=candidate,
+            lang=ctx.lang,
+            prompt_version=prompt_version,
+            model=model,
+        )
     counter("explanations.served", source="ai_verified")
     _log.info(
         "explanations.verified",
