@@ -36,6 +36,39 @@
 #         - quality_criteria: a one-line note of what "good" means for THIS gap
 #                             (right gap explained, sensible fix, clear Arabic).
 #         - quality_score:    leave null; rated 1-5 once in C3, never off a stub.
+#
+# SAME-MODEL A/B (gap-ar-v2 release, 2026-06-27). The live `quality_score` below
+# is the v2-now reading. The OLD 4.79 mean is HISTORICAL — it was measured on the
+# 2026-06-22 model snapshot, which behaves differently (ropa-non_compliant ran 548
+# chars then; the current model runs it 907, verbatim-copy, gate-rejected). Proven
+# behavioral model drift under the same `gemini-2.5-flash` alias (ADR-0013 trigger
+# (c)), so v2 is NOT compared to 4.79; it is compared to a same-model v1 re-run.
+# The clean single-variable A/B (both runs current model, 2026-06-27):
+#   run v1-now: gemini-2.5-flash_gap-ar-v1_20260627T212743Z
+#   run v2-now: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
+#   case                          v1-now  v2-now
+#   privacy-notice-non_compliant   5.00    5.00   (prompt byte-identical v1<->v2)
+#   privacy-notice-partial         5.00    5.00   (prompt byte-identical)
+#   privacy-notice-not_assessed    4.00    5.00   (v1-now hedged a gap; v2-now neutral)
+#   dsr-access-non_compliant       5.00    5.00   (prompt byte-identical)
+#   dsr-access-partial             5.00    5.00   (prompt byte-identical)
+#   dsr-access-not_assessed        3.00    4.50   (asserted a gap -> neutral; the win)
+#   breach-72h-non_compliant       5.00    5.00   (prompt byte-identical)
+#   breach-72h-partial             5.00    5.00   (prompt byte-identical)
+#   breach-72h-not_assessed        5.00    5.00   (neutral in both)
+#   ropa-non_compliant             4.00    4.00   (prompt byte-identical; gate-FAILS
+#                                                  in BOTH at 907 — inherited verbatim
+#                                                  -copy weakness x drift, not v2)
+#   ropa-not_assessed              4.00    4.25   (partial neutrality — questions-branch
+#                                                  weaker than empty-branch, capped)
+#   security-measures-not_assessed 5.00    5.00   (neutral in both)
+#   lawful-basis-not_assessed      5.00    5.00   (neutral in both)
+#   cross-border-not_assessed      5.00    5.00   (cleanest neutral win, empty-branch)
+# Means by surface (v2-now, same-model), never conflated:
+#   - five RATED not_assessed (the A/B subject): v1-now 4.40 -> v2-now 4.75 (ACCEPTED).
+#   - seven not_assessed (all v2-affected):      v2-now 4.82.
+#   - all fourteen (live mean):                  v2-now 4.84.
+# Zero regression across the fourteen.
 
 version: 1
 cases:
@@ -63,7 +96,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "عربي واضح غير تقني؛ خطوة علاجية واحدة: نشر إشعار خصوصية يغطّي الأغراض والمستلمين ومدد الاحتفاظ والحقوق؛ بلا وعود مطلقة أو ضمان امتثال."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: privacy-notice-partial
     input:
@@ -86,7 +119,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: إضافة الجهات المستلمة وحقوق صاحب البيانات للإشعار؛ لا يدّعي نقص الأغراض (مُحقَّقة)؛ بلا مبالغة."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: privacy-notice-not_assessed
     input:
@@ -107,7 +140,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
     quality_criteria: "يوضّح بأمانة أن البند لم يُقيَّم آلياً لعدم اكتمال الإجابات ويحتاج مراجعة يدوية؛ بلا اختلاق ثغرة أو حكم."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   # --- Right of access (PDPL-ART4-DSR-ACCESS, severity 7.0) — 3 statuses ---
   - id: dsr-access-non_compliant
@@ -129,7 +162,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: إنشاء آلية لاستقبال طلبات الوصول وتحديد مهلة للرد؛ بلا ضمان."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: dsr-access-partial
     input:
@@ -149,7 +182,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "سجل الأنشطة"]
     quality_criteria: "خطوة واحدة: تحديد إطار زمني نظامي للرد؛ لا يدّعي غياب الآلية (موجودة)."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: dsr-access-not_assessed
     input:
@@ -167,8 +200,9 @@ cases:
       must_contain: ["الوصول", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "تسرب"]
     quality_criteria: "يوضّح بأمانة أن جانب مهلة الرد لم يُقيَّم لعدم الإجابة؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
-    quality_score: 3
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    # gap-ar-v2 same-model: v1-now 3.00 (asserted a confirmed gap) -> v2-now 4.50 (neutral). The win.
+    quality_score: 4.5
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   # --- Breach notification 72h (PDPL-ART20, severity 10.0) — 3 statuses ---
   - id: breach-72h-non_compliant
@@ -190,7 +224,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
     quality_criteria: "خطوة واحدة: إعداد مسودة إبلاغ جاهزة وآلية إخطار خلال 72 ساعة؛ بلا مبالغة."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: breach-72h-partial
     input:
@@ -210,7 +244,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "حق الوصول", "الأساس النظامي"]
     quality_criteria: "خطوة واحدة: ضبط الإخطار ليلتزم بمهلة 72 ساعة؛ لا يدّعي غياب الإجراء."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: breach-72h-not_assessed
     input:
@@ -229,7 +263,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "حق الوصول"]
     quality_criteria: "أمانة: جانب الـ72 ساعة لم يُقيَّم؛ خطوة واحدة: استكمال المعلومة أو مراجعة يدوية."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   # --- Records of processing (PDPL-ART31-ROPA, severity 5.0) — single
   # question, so no `partial`: only non_compliant and not_assessed. ---
@@ -249,8 +283,11 @@ cases:
       must_contain: ["سجل", "أنشطة المعالجة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تسرب", "إشعار الخصوصية"]
     quality_criteria: "خطوة واحدة: إنشاء سجل أنشطة معالجة يوثّق الأغراض والفئات والمستلمين ومدد الاحتفاظ؛ بلا مبالغة."
-    quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    # gap-ar-v2 same-model: 4.00 in BOTH v1-now/v2-now (prompt byte-identical, NOT touched by v2).
+    # Down from the v1-OLD 5: the current model now emits a 907-char verbatim-copy that GATE-FAILS
+    # (>800). Inherited verbatim-copy weakness x model drift — a deferred hypothesis, not a v2 defect.
+    quality_score: 4
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: ropa-not_assessed
     input:
@@ -267,8 +304,10 @@ cases:
       must_contain: ["سجل", "مراجعة"]
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "مخالفة", "ناقص"]
     quality_criteria: "أمانة: لم يُقيَّم لعدم تقديم ما يكفي؛ خطوة واحدة: تجهيز السجل الداخلي للمراجعة اليدوية."
-    quality_score: 4
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    # gap-ar-v2 same-model: v1-now 4.00 -> v2-now 4.25 (partial neutrality; questions-branch is weaker
+    # than the empty-branch — capped deliberately to preserve that signal, see ADR-0013 / build-log).
+    quality_score: 4.25
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   # --- High-severity controls with no engine rule yet -> not_assessed with the
   # generic rationale. These test that the model binds to the control TITLE when
@@ -288,7 +327,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تشفير", "اختراق"]
     quality_criteria: "يربط بعنوان الضابط فقط، يوضّح عدم التقييم والحاجة لمراجعة يدوية؛ بلا اختلاق أي ثغرة أمنية محدّدة."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: lawful-basis-not_assessed
     input:
@@ -305,7 +344,7 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "بدون مسوّغ", "تسرب"]
     quality_criteria: "يربط بالعنوان، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة مثل (تجمع بيانات بدون أساس)؛ حياد تام."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z
 
   - id: cross-border-not_assessed
     input:
@@ -322,4 +361,4 @@ cases:
       must_not_contain: ["أنت ملتزم", "متوافق بالكامل", "تنقل بدون", "تسرب"]
     quality_criteria: "يربط بعنوان النقل خارج المملكة، يوضّح عدم التقييم والحاجة لمراجعة؛ بلا اختلاق مخالفة نقل."
     quality_score: 5
-    quality_score_run: gemini-2.5-flash_gap-ar-v1_20260622T195344Z
+    quality_score_run: gemini-2.5-flash_gap-ar-v2_20260627T212044Z

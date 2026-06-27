@@ -170,3 +170,42 @@ namespace rather than edit a row.
 - **ADR-0009 open question** — "Prompt-version governance: how `prompt_version` is
   bumped and reviewed when the prompt changes." Resolved by §2–§5 above; the
   ADR-0009 line is marked RESOLVED by this ADR.
+
+## First application — `gap-ar-v1 → gap-ar-v2` (2026-06-27)
+
+The first real bump exercised the full ritual, and it behaved as designed.
+
+- **The guard proved it can FAIL, not merely match.** With the v2 wording in place
+  but the pin still on `gap-ar-v1`, `test_prompt_version_governance.py` FAILED
+  (`gap-ar-v2 != gap-ar-v1` + surface-hash mismatch); only after bumping
+  `PROMPT_VERSION` and re-capturing `_PINNED_SURFACE_HASH` from the real
+  `_compute_prompt_surface_hash()` did it pass. A guard that can only match is
+  vacuous; the proof it fails on an un-bumped change is the point (§4). The change
+  itself was status-aware question framing for `not_assessed` only (the §2(a)
+  template trigger) — `non_compliant` / `partial` rendering byte-identical.
+
+- **Trigger (c) fired for real — and the detect-not-prevent limit bit exactly as
+  ADR-0011 §6 / §2(c) predicted.** Across the bump the `gemini-2.5-flash` alias
+  was (behaviorally) re-pointed to a newer snapshot: under the BYTE-IDENTICAL v1
+  prompt, `ropa-non_compliant` moved 548 chars (2026-06-22, paraphrase, gate-pass)
+  → 907 chars (2026-06-27, verbatim clause-copy, gate-fail), stable across two
+  runs — not sample noise. This is a material model change under a frozen prompt.
+  **It is NOT provable from provenance:** both the artifact and the live API
+  response record only the alias `gemini-2.5-flash`, never a dated snapshot — so
+  the drift is *inferred behaviorally*, exactly the post-call blind spot §2(c)
+  cedes to human review. **Mitigation (applied, not deferred):** the orphaned-
+  baseline risk this creates — the 4.79 mean was rated on the older model — was
+  handled by a **same-model re-baseline**: v1 was re-run on the current model so
+  the release comparison is v1-now vs v2-now (one variable, the prompt), and 4.79
+  is marked HISTORICAL in `golden_set.yaml`, not a live baseline. The re-rate that
+  §4(c) mandates was therefore a *same-model* re-rate, which is the only honest
+  one once the model has drifted.
+
+- **A schema follow-up is now framed (separate, deferred hypothesis).**
+  `build_review_artifact` should persist the live `modelVersion` the explainer
+  already parses (`pdpl.ai.gemini`, the `modelVersion` field) into the eval
+  artifact, so a future trigger-(c) drift is **detectable from the artifact**, not
+  merely inferable from behavior. This narrows — does not close — the §2(c) blind
+  spot (the alias can still hide a snapshot the provider does not surface), so it
+  remains human review, better instrumented. Not built here (one variable per
+  session); recorded as the next governance increment.
