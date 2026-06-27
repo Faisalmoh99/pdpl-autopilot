@@ -86,8 +86,30 @@ an optimization: expanding a pool you shrank is removing a self-imposed
 handicap, a vacuous before/after. The real optimization reduces connection
 hold-time (ADR-0014 §7), because production (Nano) is capped at 15.
 
-## Targets 2 and 3 (later)
+## Target 3 — the explanation path + the §7 hold-time fix (DONE, ADR-0014 Findings §5–§8)
 
-`POST /checks` (write path, expected to knee near 15) and `POST /explanations`
-(stub-backed, never the real Gemini API) follow once the readiness signal is
-understood. Framed in ADR-0014 §1.
+The explanation miss path is driven by a **load-only app** (`explain_app.py`,
+never on main) that runs the REAL orchestration (cache + gate + put) with an
+injected ~50 ms async-latency stub standing in for Gemini, and a per-request
+fresh `prompt_version` forcing a cache MISS every request (so the stub call —
+and the connection hold across it — actually happens). It is the probe's
+hold-time shape, on the real path.
+
+```bash
+# 0. (once) prove the stub text passes the gate under the real seeded GapContext,
+#    so every request exercises the FULL miss path (call -> gate -> put).
+.venv/bin/python load/check_gate.py
+
+# 1. The before/after sweep (BEFORE on the call-inside-scope code, AFTER on the
+#    §7-fixed code). The harness is FROZEN between the two runs — only src/ changes.
+.venv/bin/python load/pool_sweep.py explain
+```
+
+**Result (ADR-0014 Findings §6):** BEFORE the fix the throughput **tracks pool
+size** (79→362 req/s across pool 5→25 — POOL-BOUND, reproducing the probe on the
+real path); AFTER moving the Gemini call outside `session_scope` it goes **flat**
+(event-loop-bound, the pool removed as the binding constraint). The headline is
+the **constraint change**, not the loopback speed-up — it transfers to production
+where the networked ~100 ms hold-time makes the 15-connection Nano pool the real
+constraint. The fix preserves every ADR-0011 safety invariant (gate-before-put,
+re-gate-on-hit, the keystone on both paths) — verified green.

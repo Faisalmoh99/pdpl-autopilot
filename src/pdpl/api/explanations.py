@@ -96,6 +96,11 @@ async def explain_tenant_gap(
 
     settings = get_settings()
 
+    # A SHORT read transaction: validate the tenant + re-derive the structured
+    # verdict, then RELEASE the connection before the (slow) explainer call. The
+    # connection is no longer held across the model call (ADR-0014 §7 hold-time
+    # fix); `explain_gap` owns its own short cache-read / verified-put
+    # transactions internally.
     async with session_scope() as session:
         tenant_row = (
             await session.execute(_SELECT_TENANT_ACTIVE_SQL, {"tenant_id": tenant_id})
@@ -110,31 +115,29 @@ async def explain_tenant_gap(
         answers = await load_tenant_answers(session, tenant_id)
         decision = build_control_decider(answers)(control_code)
 
-        ctx = build_gap_context(
-            control_code=control_code,
-            control_title_ar=control.title_ar,
-            control_description_ar=control.description_ar,
-            status=decision.status,
-            rationale=decision.rationale,
-            severity_weight=control.severity_weight,
-            unsatisfied_codes=decision.unsatisfied_codes,
-        )
+    # Pure assembly — no DB, so it runs after the read transaction is released.
+    ctx = build_gap_context(
+        control_code=control_code,
+        control_title_ar=control.title_ar,
+        control_description_ar=control.description_ar,
+        status=decision.status,
+        rationale=decision.rationale,
+        severity_weight=control.severity_weight,
+        unsatisfied_codes=decision.unsatisfied_codes,
+    )
 
-        # Construct the real explainer only now (after validation), so the 404
-        # paths above never require GEMINI_API_KEY. Fails fast if misconfigured.
-        chosen = (
-            explainer
-            if explainer is not None
-            else gemini_explainer_from_settings(settings)
-        )
+    # Construct the real explainer only now (after validation), so the 404 paths
+    # above never require GEMINI_API_KEY. Fails fast if misconfigured.
+    chosen = (
+        explainer if explainer is not None else gemini_explainer_from_settings(settings)
+    )
 
-        return await explain_gap(
-            session,
-            ctx,
-            chosen,
-            model=settings.gemini_model,
-            prompt_version=prompt_version,
-        )
+    return await explain_gap(
+        ctx,
+        chosen,
+        model=settings.gemini_model,
+        prompt_version=prompt_version,
+    )
 
 
 class ExplainIn(BaseModel):

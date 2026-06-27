@@ -61,12 +61,22 @@ _TREND = "avg,med,p(95),p(99),max"
 
 # Mode: "det" (default) sweeps the deterministic readiness+checks paths on the
 # real app; "probe" sweeps the hold-time probe on the load-only probe app, with
-# a 50ms pure-async hold injected so the pool (not the event loop) binds.
+# a 50ms pure-async hold injected so the pool (not the event loop) binds;
+# "explain" sweeps the REAL explanation orchestration on the load-only explain
+# app (cache + gate + put) with the same 50ms injected stub latency — the
+# probe's shape on the real path (ADR-0014 §1 target 3 / §7). Run it twice: once
+# on the BEFORE code (call inside session_scope -> expect TRACKS pool) and once
+# on the §7-fixed code (call outside session_scope -> expect FLAT). The harness
+# is FROZEN between the two runs so the only variable is the refactor.
 _MODE = sys.argv[1] if len(sys.argv) > 1 else "det"
 if _MODE == "probe":
     _APP = "load.probe_app:app"
     _TARGETS = ["probe"]
     _EXTRA_ENV = {"LOAD_PROBE_HOLD_SECONDS": "0.05"}
+elif _MODE == "explain":
+    _APP = "load.explain_app:app"
+    _TARGETS = ["explanations"]
+    _EXTRA_ENV = {"LOAD_EXPLAIN_HOLD_SECONDS": "0.05"}
 else:
     _APP = "pdpl.main:app"
     _TARGETS = ["readiness", "checks"]

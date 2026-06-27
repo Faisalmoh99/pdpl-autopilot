@@ -1,9 +1,12 @@
 """Integration tests for the runtime orchestration `explain_gap`
 (ADR-0011 §2) — against the same Supabase project as the C3b cache tests.
 
-`explain_gap` is now cache-aware, so it needs a real DB session (the cache is
-integral to the runtime path). Each test uses a UNIQUE GapContext (a nonce in
-the rationale) so cache rows never collide across runs.
+`explain_gap` owns its own short cache transactions (ADR-0014 §7: read in one,
+verified `put` in another, the external call between holding no connection), so
+it needs a real DB but no caller-supplied session. Each test uses a UNIQUE
+GapContext (a nonce in the rationale) so cache rows never collide across runs.
+The poisoned-row test still opens its own `session_scope` to inject the bad row
+directly via `put` (bypassing the gate, as the runtime write path would not).
 
 THE KEYSTONE (ADR-0010 §5) is surfaced here on BOTH paths the gate now guards:
   - FRESH: a deliberately-unsafe explainer asserts compliance -> the gate
@@ -108,8 +111,7 @@ async def test_keystone_fresh_compliance_assertion_is_rejected(app) -> None:
     ctx = _ctx()
     explainer = StubExplainer.asserting_compliance()
 
-    async with session_scope() as session:
-        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+    result = await explain_gap(ctx, explainer, model=_MODEL)
 
     assert explainer.calls == [ctx]  # we really ran produce -> verify -> fallback
     assert result.source == "fallback"
@@ -137,8 +139,7 @@ async def test_keystone_poisoned_cache_row_is_regated_and_rejected(app) -> None:
         )
 
     explainer = StubExplainer.good(_GOOD_AR)
-    async with session_scope() as session:
-        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+    result = await explain_gap(ctx, explainer, model=_MODEL)
 
     assert explainer.calls == []  # a hit — the model was not called
     assert result.source == "fallback"
@@ -157,8 +158,7 @@ async def test_verified_output_is_returned_and_cached_then_hit(app) -> None:
     ctx = _ctx()
 
     explainer = StubExplainer.good(_GOOD_AR)
-    async with session_scope() as session:
-        first = await explain_gap(session, ctx, explainer, model=_MODEL)
+    first = await explain_gap(ctx, explainer, model=_MODEL)
 
     assert first.source == "ai_verified"
     assert first.text == _GOOD_AR
@@ -168,8 +168,7 @@ async def test_verified_output_is_returned_and_cached_then_hit(app) -> None:
 
     # Second call: a different explainer that must NOT be called (cache hit).
     second_explainer = StubExplainer.good("نص مختلف يجب ألا يُستخدم لأن الكاش يخدم.")
-    async with session_scope() as session:
-        second = await explain_gap(session, ctx, second_explainer, model=_MODEL)
+    second = await explain_gap(ctx, second_explainer, model=_MODEL)
 
     assert second.source == "cache_hit"
     assert second.text == _GOOD_AR  # served the first verified text, not the new one
@@ -186,8 +185,7 @@ async def test_explainer_error_falls_back(app) -> None:
     ctx = _ctx()
     explainer = _RaisingExplainer()
 
-    async with session_scope() as session:
-        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+    result = await explain_gap(ctx, explainer, model=_MODEL)
 
     assert explainer.calls == [ctx]
     assert result.source == "fallback"
@@ -202,8 +200,7 @@ async def test_model_version_is_propagated_to_the_result(app) -> None:
     ctx = _ctx()
     explainer = _VersionedExplainer(text=_GOOD_AR, model_version="gemini-2.5-flash-002")
 
-    async with session_scope() as session:
-        result = await explain_gap(session, ctx, explainer, model=_MODEL)
+    result = await explain_gap(ctx, explainer, model=_MODEL)
 
     assert result.source == "ai_verified"
     assert result.model_version == "gemini-2.5-flash-002"
