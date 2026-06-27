@@ -83,3 +83,21 @@ make the system faster on the resource that actually binds in production **witho
 safety gate one inch — and to *prove* both halves with numbers (the sweep) and tests (the keystone),
 not assert them. "Removed the pool as the binding constraint" is a defensible, transferable claim;
 "got 2× faster locally" would have been the loopback illusion dressed up as a result.
+
+## Lessons — Stage 3
+
+- **فصلنا الأداء عن الأمان، وكسبنا الاثنين.** التحسين نقل نداء الـ explainer خارج
+  session_scope فتحرّر الاتصال أثناء النداء (مكسب الأداء)، بينما بقي الـ gate قبل الـ put
+  تماماً في موضعه (الأمان). الدرس أن الأداء والأمان concerns مستقلّان: تغيير دورة حياة
+  الاتصال لا يستلزم لمس نقطة التحقّق — قدرنا نُحسّن مساراً كاملاً دون أن نمسّ الـ chokepoint.
+  والأهم: لم نفترض نجاة الأمان، **أثبتناها** — الـ keystone رُكِّض صراحةً على المسارين بعد
+  الـ refactor (fresh compliance-assertion مرفوض، و poisoned cache row مرفوض عبر re-gate
+  على الـ HIT). تحسينٌ بلا إثبات أن الأمان نجا مقامرة، لا هندسة.
+
+- **بعد إزالة القيد، الاتصالات الزائدة عبء لا ميزة.** قبل الإصلاح، الـ throughput يتتبّع
+  حجم الـ pool خطّياً (79→362) لأن الاتصال كان مُحتجَزاً عبر النداء — pool-bound. بعد
+  الإصلاح، الـ throughput لم يعد يتتبّع الـ pool، بل **انحدر** كلّما كبر (501→378): ما إن
+  زال الاحتجاز كقيد، صارت الاتصالات الفائضة overhead صافياً على الـ event-loop الواحد
+  (bookkeeping ومنافسة backends)، لا سعةً إضافية. الدرس أن "كبّر الـ pool" ليس حلّاً
+  عامّاً — بعد تجاوز القيد الحقيقي، الزيادة تضرّ. الإصلاح الصحيح كان معمارياً (تقليل
+  hold-time)، وهو وحده ما ينتقل للإنتاج حيث الـ pool=15 مسقوف.
