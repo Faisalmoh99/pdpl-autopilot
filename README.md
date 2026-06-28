@@ -82,7 +82,8 @@ opposite of the discipline this project is practising.
 The fix was methodological: re-run v1 on the *current* model and compare **v1-now vs v2-now**, so the
 prompt is the only variable and upstream drift can't masquerade as a prompt win.
 
-→ [build-log: v2 prompt + the drift finding](build-log/2026-06-27-v2-prompt-not-assessed-neutral-framing.md) ·
+→ [case study — the narrated walkthrough](docs/case-studies/model-drift-same-model-ab.md) ·
+[build-log: v2 prompt + the drift finding](build-log/2026-06-27-v2-prompt-not-assessed-neutral-framing.md) ·
 [ADR-0013 — Prompt-Version Governance](docs/adr/0013-prompt-version-governance.md)
 
 ---
@@ -94,7 +95,7 @@ Six domains, each with evidence you can open and check.
 | Domain | What it proves | Evidence |
 |---|---|---|
 | **System Design** | 14 ADRs, each with real alternatives and trade-offs; multi-tenant relational schema with application-level tenant scoping; PostgreSQL chosen over Firestore on the domain's relational shape | [ADR-0001](docs/adr/0001-database-choice.md) · [ADR-0002](docs/adr/0002-findings-history-model.md) · [data model](docs/02-data-model.md) |
-| **AI Product** | The AI-vs-deterministic safety line; a reusable eval harness measuring quality numerically; a surgical v2 prompt iteration | [ADR-0009](docs/adr/0009-ai-gap-explanation-layer.md) · [ADR-0010](docs/adr/0010-ai-explanation-eval-methodology.md) · [ADR-0013](docs/adr/0013-prompt-version-governance.md) |
+| **AI Product** | The AI-vs-deterministic safety line; a reusable eval harness measuring quality numerically; a surgical v2 prompt iteration that also caught model drift | [case study](docs/case-studies/model-drift-same-model-ab.md) · [ADR-0009](docs/adr/0009-ai-gap-explanation-layer.md) · [ADR-0010](docs/adr/0010-ai-explanation-eval-methodology.md) · [ADR-0013](docs/adr/0013-prompt-version-governance.md) |
 | **Observability** | structlog JSON logging, one correlation ID threaded end-to-end (request → DB → audit row → response), validated under load via `pg_stat_activity` | [ADR-0004](docs/adr/0004-application-foundation-and-observability.md) · [ADR-0014](docs/adr/0014-load-testing-methodology.md) |
 | **Reliability** | Transactional outbox so an alert is never lost on a crash; a failure path (DLQ); retry with full-jitter backoff and an idempotency key; an HMAC-signed webhook | [ADR-0008](docs/adr/0008-reliable-alerting-transactional-outbox.md) |
 | **Scale** | The hypothesis inversion — 218 RPS pool-bound → 435 RPS event-loop-bound — derived from a pre-registered knee rule, not an eyeballed bend | [case study](docs/case-studies/load-testing-hypothesis-inversion.md) · [ADR-0014](docs/adr/0014-load-testing-methodology.md) |
@@ -174,8 +175,9 @@ Short on time? Read these five, in order:
    AI-vs-deterministic safety line, the load-bearing architectural decision.
 4. **[ADR-0001 — Database Choice](docs/adr/0001-database-choice.md)** — a decision owned with real
    alternatives (PostgreSQL vs Firestore).
-5. **[build-log — v2 prompt + the drift finding](build-log/2026-06-27-v2-prompt-not-assessed-neutral-framing.md)** —
-   AI-PM judgment: catching model drift with a same-model A/B.
+5. **[Case study — Model Drift Caught by a Same-Model A/B](docs/case-studies/model-drift-same-model-ab.md)** —
+   AI-PM judgment, narrated: a quality baseline quietly invalidated by a model that changed under a
+   frozen prompt, caught and isolated by a same-model A/B. The second narrated case study.
 
 ---
 
