@@ -57,11 +57,13 @@ transaction only for the verified write. On the real explanation miss-path, at t
 > **218 RPS (pool-bound) → 435 RPS (event-loop-bound).**
 
 The headline isn't "faster locally" — on loopback the network is absent. The transferable result is
-that the fix **removed the pool as the binding constraint**: in production, the networked ~100 ms
-Gemini hold-time is exactly the regime where the 15-connection Nano pool (which *cannot* be grown)
-becomes the real limit — and releasing the connection across the call is what removes it.
+that the fix **removed the pool as the binding constraint**: in production, an estimated ~100 ms
+Gemini hold-time (networked, not measured on this system) is exactly the regime where the
+15-connection Nano pool (which *cannot* be grown) becomes the real limit — and releasing the
+connection across the call is what removes it.
 
-→ [ADR-0014 — Load-Testing Methodology](docs/adr/0014-load-testing-methodology.md) ·
+→ [case study — the narrated walkthrough](docs/case-studies/load-testing-hypothesis-inversion.md) ·
+[ADR-0014 — Load-Testing Methodology](docs/adr/0014-load-testing-methodology.md) ·
 [build-log: the §7 hold-time fix](build-log/2026-06-27-phase5-load-testing-stage3-explanation-holdtime-fix.md)
 
 ### 2. The same-model A/B that caught model drift
@@ -95,7 +97,7 @@ Six domains, each with evidence you can open and check.
 | **AI Product** | The AI-vs-deterministic safety line; a reusable eval harness measuring quality numerically; a surgical v2 prompt iteration | [ADR-0009](docs/adr/0009-ai-gap-explanation-layer.md) · [ADR-0010](docs/adr/0010-ai-explanation-eval-methodology.md) · [ADR-0013](docs/adr/0013-prompt-version-governance.md) |
 | **Observability** | structlog JSON logging, one correlation ID threaded end-to-end (request → DB → audit row → response), validated under load via `pg_stat_activity` | [ADR-0004](docs/adr/0004-application-foundation-and-observability.md) · [ADR-0014](docs/adr/0014-load-testing-methodology.md) |
 | **Reliability** | Transactional outbox so an alert is never lost on a crash; a failure path (DLQ); retry with full-jitter backoff and an idempotency key; an HMAC-signed webhook | [ADR-0008](docs/adr/0008-reliable-alerting-transactional-outbox.md) |
-| **Scale** | The hypothesis inversion — 218 RPS pool-bound → 435 RPS event-loop-bound — derived from a pre-registered knee rule, not an eyeballed bend | [ADR-0014](docs/adr/0014-load-testing-methodology.md) |
+| **Scale** | The hypothesis inversion — 218 RPS pool-bound → 435 RPS event-loop-bound — derived from a pre-registered knee rule, not an eyeballed bend | [case study](docs/case-studies/load-testing-hypothesis-inversion.md) · [ADR-0014](docs/adr/0014-load-testing-methodology.md) |
 | **Architectural guard** | import-linter contracts mechanically forbid the deterministic core from importing the AI layer (or any LLM SDK), enforced in the test suite; the gate-before-put invariant holds on every user-facing string | [.importlinter](.importlinter) · [test_architecture.py](tests/test_architecture.py) · [ADR-0011](docs/adr/0011-runtime-explanation-orchestration.md) |
 
 ---
@@ -161,15 +163,18 @@ first. Deliberately deferred:
 
 ## Start here: a reading path
 
-Short on time? Read these four, in order:
+Short on time? Read these five, in order:
 
-1. **[ADR-0014 — Load-Testing Methodology](docs/adr/0014-load-testing-methodology.md)** — the
-   hypothesis inversion; how the breaking point was found by a pre-registered rule and a causal sweep.
-2. **[ADR-0009 — AI Gap-Explanation Layer](docs/adr/0009-ai-gap-explanation-layer.md)** — the
+1. **[Case study — the Load-Testing Hypothesis Inversion](docs/case-studies/load-testing-hypothesis-inversion.md)** —
+   the strongest story, narrated: a going-in pool-bound hypothesis that direct measurement inverted,
+   the §7 fix that followed, and the safety line that held. The most readable entry point.
+2. **[ADR-0014 — Load-Testing Methodology](docs/adr/0014-load-testing-methodology.md)** — the full
+   methodology behind that story: the pre-registered knee rule and the causal sweep tables.
+3. **[ADR-0009 — AI Gap-Explanation Layer](docs/adr/0009-ai-gap-explanation-layer.md)** — the
    AI-vs-deterministic safety line, the load-bearing architectural decision.
-3. **[ADR-0001 — Database Choice](docs/adr/0001-database-choice.md)** — a decision owned with real
+4. **[ADR-0001 — Database Choice](docs/adr/0001-database-choice.md)** — a decision owned with real
    alternatives (PostgreSQL vs Firestore).
-4. **[build-log — v2 prompt + the drift finding](build-log/2026-06-27-v2-prompt-not-assessed-neutral-framing.md)** —
+5. **[build-log — v2 prompt + the drift finding](build-log/2026-06-27-v2-prompt-not-assessed-neutral-framing.md)** —
    AI-PM judgment: catching model drift with a same-model A/B.
 
 ---
