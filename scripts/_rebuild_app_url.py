@@ -19,7 +19,7 @@ from dotenv import dotenv_values
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 HOST = "aws-1-eu-central-1.pooler.supabase.com"
-USER = "pdpl_app.xuyvhedqthkrklaeiysx"
+USER = "pdpl_app.<project>"  # set to your Supabase project-ref
 PORT = "5432"
 DBNAME = "postgres"
 

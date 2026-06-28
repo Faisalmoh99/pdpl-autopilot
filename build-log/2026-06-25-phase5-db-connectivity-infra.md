@@ -13,7 +13,7 @@ connection is **not** yet verified green.
    with `env -u APP_DATABASE_URL`** so the freshly-rebuilt `.env` value is the one used.
 
 2. **The local network is IPv6-blocked → MUST use the `aws-1-eu-central-1` Supavisor session pooler**
-   with user `pdpl_app.xuyvhedqthkrklaeiysx` on port `5432` (host
+   with user `pdpl_app.<project>` on port `5432` (host
    `aws-1-eu-central-1.pooler.supabase.com`). Confirmed working at the TCP layer: both test runs this
    session reached the Postgres auth handshake (asyncpg got past `await connector`), i.e. the pooler is
    reachable and the IPv4 path is good. The direct `db.<ref>.supabase.co` endpoint is not reachable
